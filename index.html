@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión La Hacienda | Comedor Industrial</title>
+  <link rel="stylesheet" href="src/styles.css">
+  <link rel="stylesheet" href="src/inventory.css">
+  <link rel="stylesheet" href="src/sales-summary.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><strong>Gestión La Hacienda</strong><span>Comedor industrial</span></div>
+    <nav>
+      <button data-view="inventario"><i>▣</i> Inventario</button>
+      <button data-view="ventas"><i>⊞</i> Ventas</button>
+      <button data-view="resumen"><i>◫</i> Cierres de turno</button>
+      <button data-view="historial">Historial de ventas</button>
+    </nav>
+    <div class="sidebar-bottom"><button><i>⚙</i> Configuración</button><button><i>?</i> Ayuda</button></div>
+  </aside>
+
+  <main>
+    <header>
+      <button class="menu-button">☰</button>
+    </header>
+
+    <section id="inventario" class="view">
+      <div class="title-row">
+        <div><p class="eyebrow">GESTIÓN DE EXISTENCIAS</p><h1>Inventario actual</h1></div>
+        <div class="actions"><button class="secondary">⇩ Exportar</button><button class="primary" id="add-product">＋ Nuevo producto</button></div>
+      </div>
+      <div class="inventory-search search">⌕ <input placeholder="Buscar productos o código de producto…"></div>
+      <div class="stats">
+        <article><span>Productos activos</span><strong id="product-count">3</strong><small>Catálogo disponible</small></article>
+        <article><span>Stock bajo</span><strong class="warning-text" id="low-stock">1</strong><small>Requiere reposición</small></article>
+        <article><span>Valor de inventario</span><strong>$2,846.50</strong><small>Actualizado hoy</small></article>
+      </div>
+      <div class="panel">
+        <div class="panel-toolbar"><h2>Productos</h2><select><option>Todas las categorías</option><option>Bebidas</option><option>Alimentos</option></select></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>PRODUCTO</th><th>CÓDIGO DEL PRODUCTO</th><th>CATEGORÍA</th><th>PRECIO</th><th>EXISTENCIAS</th><th>ESTADO</th><th></th></tr></thead>
+            <tbody id="inventory-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="ventas" class="view">
+      <div class="pos-heading"><div><p class="eyebrow">PUNTO DE VENTA</p><h1>Turno activo: Almuerzo</h1></div><span class="shift-status">● Caja abierta</span></div>
+      <div class="pos-layout">
+        <div class="products"><div class="product-heading"><h2>Menú del día</h2><span>Seleccione para agregar al pedido</span></div><div id="product-grid" class="product-grid"></div></div>
+        <aside class="cart"><div class="cart-header"><p class="eyebrow">PEDIDO ACTUAL</p><button id="clear-cart">⌫</button></div><div id="cart-items" class="cart-items"></div><div class="sale-type-control"><label for="sale-type">Tipo de venta</label><select id="sale-type"><option value="COMEDOR">COMEDOR</option><option value="FACTURADA">FACTURADA</option><option value="PERSONAL">PERSONAL</option></select></div><div class="totals"><p class="grand-total"><span>Total a pagar</span><strong id="total">$0.00</strong></p></div><button class="checkout" id="checkout">✓ Cobrar venta</button></aside>
+      </div>
+    </section>
+
+    <section id="resumen" class="view">
+      <div class="title-row"><div><p class="eyebrow">CIERRE Y RESUMEN</p><h1>Resumen de turno</h1><p class="muted">Turno de Almuerzo · 11:30 AM - 03:30 PM</p></div><div class="actions"><button class="secondary">⇩ Exportar reporte</button><button class="primary" id="close-shift">✓ Finalizar turno</button></div></div>
+      <div class="stats summary-stats"><article><span>Total ventas</span><strong id="summary-sales">$0.00</strong><small>Ingresos del turno</small></article><article><span>Comedor</span><strong id="summary-comedor">$0.00</strong><small>Ingresos por comedor</small></article><article><span>Facturada</span><strong id="summary-facturada">$0.00</strong><small>Ingresos facturados</small></article><article><span>Personal</span><strong id="summary-personal">$0.00</strong><small>Ingresos de personal</small></article><article><span>Porciones vendidas</span><strong id="summary-portions">0</strong><small>Productos cobrados</small></article><article><span>Estado de insumos</span><strong class="warning-text" id="summary-stock">1 alerta</strong><small>Productos con stock bajo</small></article></div>
+      <div class="panel report"><div><h2>Desglose de ventas por producto</h2><p class="muted">Ventas agrupadas por tipo para facilitar la auditoría del turno.</p></div><div id="sales-report" class="report-list"></div></div>
+    </section>
+  
+    <section id="historial" class="view">
+    <div class="title-row">
+      <div>
+        <h1>Historial de Ventas</h1>
+        <p class="muted">Audita transacciones pasadas, modifica cantidades o corrige el tipo de venta.</p>
+      </div>
+    </div>
+    
+    <div class="panel">
+      <div class="table-wrap">
+        <table id="history-table">
+          <thead>
+            <tr>
+              <th>ID Venta</th>
+              <th>Tipo</th>
+              <th>Productos y Cantidades</th>
+              <th>Total</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="history-list">
+            <!-- El contenido se inyectará dinámicamente con JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+  
+
+  <dialog id="product-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><h2>Nuevo producto</h2><button>×</button></div>
+      <label>Nombre<input id="new-name" required placeholder="Ej. Agua natural 600 ml"></label>
+      <label>Código del producto<input id="new-sku" required placeholder="Ej. 50012"></label>
+      <label>Precio<input id="new-price" required type="number" min="0" step="0.01"></label>
+      <label>Existencias<input id="new-stock" required type="number" min="0"></label>
+      <div class="dialog-actions"><button class="secondary" value="cancel">Cancelar</button><button class="primary" id="save-product" value="default">Guardar producto</button></div>
+    </form>
+  </dialog>
+  <dialog id="restock-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><h2>Reponer existencias</h2><button value="cancel">×</button></div>
+      <p class="muted">Producto: <strong id="restock-product-name"></strong></p>
+      <label>Cantidad a agregar<input id="restock-quantity" required type="number" min="1" step="1" placeholder="Ej. 20"></label>
+      <div class="dialog-actions"><button class="secondary" value="cancel">Cancelar</button><button class="primary" id="save-restock" value="default">Agregar existencias</button></div>
+    </form>
+  </dialog>
+  <div id="toast" role="status"></div>
+  <script src="src/views/InventoryView.js"></script>
+  <script src="src/views/SalesView.js"></script>
+  <script src="src/views/ShiftSummaryView.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>

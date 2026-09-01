@@ -1,0 +1,23 @@
+/* Ajustes propios de la ventana de Inventario. */
+.inventory-search {
+  max-width: none;
+  margin: -12px 0 24px;
+}
+
+.product-actions {
+  white-space: nowrap;
+}
+
+.product-actions .row-action + .row-action {
+  margin-left: 10px;
+}
+
+.delete-action {
+  color: var(--danger);
+}
+
+@media (max-width: 600px) {
+  .inventory-search {
+    display: block;
+  }
+}

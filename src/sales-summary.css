@@ -1,0 +1,53 @@
+/* Controles del Punto de Venta y desglose por tipo para el cierre. */
+.sale-type-control {
+  display: grid;
+  gap: 7px;
+  margin: 18px 0 4px;
+}
+
+.sale-type-control label {
+  font-size: 12px;
+}
+
+.sale-type-control select {
+  width: 100%;
+  font-weight: 700;
+}
+
+.summary-stats {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.sales-type-group + .sales-type-group {
+  margin-top: 24px;
+}
+
+.sales-type-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--soft);
+  border-radius: 6px;
+  color: var(--navy);
+}
+
+.sales-type-heading span {
+  font-weight: 800;
+}
+
+.sales-type-group .muted {
+  margin: 12px 0 0;
+}
+
+@media (max-width: 850px) {
+  .summary-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .summary-stats {
+    grid-template-columns: 1fr;
+  }
+}
