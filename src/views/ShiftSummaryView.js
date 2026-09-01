@@ -2,7 +2,7 @@ const SHIFT_LOW_STOCK_LIMIT = 10;
 const SALE_TYPES = [
   { value: 'COMEDOR', label: 'Comedor' },
   { value: 'FACTURADA', label: 'Facturada' },
-  { value: 'We', label: 'Personal' },
+  { value: 'PERSONAL', label: 'Personal' },
 ];
 
 /** Gestiona las métricas y la auditoría del cierre de turno por tipo de venta. */
