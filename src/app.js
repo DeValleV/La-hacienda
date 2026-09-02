@@ -11,7 +11,7 @@ const salesHistory = [];
 const formatMoney = (amount) => new Intl.NumberFormat('es-MX', {
   style: 'currency',
   currency: 'MXN',
-  currencyDisplay: 'code',
+  currencyDisplay: 'symbol',
 }).format(amount);
 
 /** Coordina el estado compartido y la navegación entre las tres ventanas. */
