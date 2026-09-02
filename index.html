@@ -62,28 +62,33 @@
             <div id="category-filters" class="category-filters" role="tablist" aria-label="Filtrar productos por categoría"></div>
           </div>
           <div id="product-grid" class="product-grid"></div>
+          <section class="payment-shortcuts" aria-labelledby="payment-shortcuts-title">
+            <div class="payment-shortcuts-heading">
+              <p class="eyebrow" id="payment-shortcuts-title">COBRO RÁPIDO</p>
+              <span>Seleccione el importe recibido</span>
+            </div>
+            <div id="payment-suggestions" class="payment-suggestions" aria-label="Cantidades sugeridas"></div>
+          </section>
         </div>
         <aside class="cart">
-          <div class="cart-header"><p class="eyebrow">PEDIDO ACTUAL</p><button id="clear-cart" aria-label="Vaciar pedido">⌫</button></div>
+          <div class="cart-header"><p class="eyebrow">PEDIDO ACTUAL</p><button id="clear-cart" class="clear-cart-button" type="button">Vaciar</button></div>
           <div id="cart-items" class="cart-items"></div>
-          <fieldset class="sale-type-control">
-            <legend>Tipo de venta</legend>
-            <div class="choice-chips" role="radiogroup" aria-label="Tipo de venta">
-              <label class="choice-chip"><input type="radio" name="sale-type" value="COMEDOR" checked><span>Comedor</span></label>
-              <label class="choice-chip"><input type="radio" name="sale-type" value="FACTURADA"><span>Facturada</span></label>
-              <label class="choice-chip"><input type="radio" name="sale-type" value="PERSONAL"><span>Personal</span></label>
-            </div>
-          </fieldset>
-          <div class="payment-control">
-            <label for="amount-paid">Cantidad pagada</label>
-            <input id="amount-paid" type="number" min="0" step="0.01" inputmode="decimal" aria-describedby="change-amount">
-            <div id="payment-suggestions" class="payment-suggestions" aria-label="Cantidades sugeridas"></div>
-          </div>
           <div class="totals">
             <p class="grand-total"><span>Total a pagar</span><strong id="total">$0.00</strong></p>
+            <div class="payment-control">
+              <label for="amount-paid">Pagado</label>
+              <input id="amount-paid" type="number" min="0" step="0.01" inputmode="decimal" aria-describedby="change-amount">
+            </div>
             <p class="change-total"><span>Cambio</span><strong id="change-amount">$0.00</strong></p>
           </div>
-          <button class="checkout" id="checkout">✓ Cobrar venta</button>
+          <div id="checkout-options" class="checkout-options" aria-label="Tipo de cobro">
+            <span>Cobrar como:</span>
+            <div>
+              <button class="checkout checkout-option" type="button" data-checkout-type="COMEDOR">Comedor</button>
+              <button class="checkout checkout-option" type="button" data-checkout-type="FACTURADA">Facturada</button>
+              <button class="checkout checkout-option" type="button" data-checkout-type="PERSONAL">Personal</button>
+            </div>
+          </div>
         </aside>
       </div>
     </section>
@@ -159,7 +164,14 @@
         <label>Precio<input id="new-price" required type="number" min="0" step="0.01"></label>
         <label>Existencias<input id="new-stock" required type="number" min="0" step="0.01"></label>
         <label>Stock mínimo<input id="new-min-stock" required type="number" min="0" step="0.01"></label>
-        <label>Color de la tarjeta<input id="new-color" required type="color" value="#ff6600"></label>
+        <div class="field-group">
+          <label for="open-color-palette">Color de la tarjeta</label>
+          <input id="new-color" required type="hidden" value="#ff6600">
+          <button id="open-color-palette" class="color-picker-trigger" type="button" aria-haspopup="dialog">
+            <span class="color-preview" aria-hidden="true"></span>
+            <span>Elegir color</span>
+          </button>
+        </div>
       </div>
       <div class="dialog-actions"><button class="secondary" value="cancel">Cancelar</button><button class="primary" id="save-product" value="default">Guardar producto</button></div>
     </form>
@@ -170,6 +182,13 @@
       <p class="muted">Producto: <strong id="restock-product-name"></strong></p>
       <label>Cantidad a agregar<input id="restock-quantity" required type="number" min="1" step="1" placeholder="Ej. 20"></label>
       <div class="dialog-actions"><button class="secondary" value="cancel">Cancelar</button><button class="primary" id="save-restock" value="default">Agregar existencias</button></div>
+    </form>
+  </dialog>
+  <dialog id="color-palette-dialog" class="color-palette-dialog" aria-labelledby="color-palette-title">
+    <form method="dialog">
+      <div class="dialog-head"><div><p class="eyebrow">PALETA DE LA TARJETA</p><h2 id="color-palette-title">Elige un color</h2></div><button value="cancel" aria-label="Cerrar paleta">×</button></div>
+      <div id="color-options" class="color-options" aria-label="40 opciones de color"></div>
+      <p class="muted">El color identificará la tarjeta de este producto en el punto de venta.</p>
     </form>
   </dialog>
   <div id="toast" role="status"></div>

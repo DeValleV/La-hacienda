@@ -1,4 +1,14 @@
 const LOW_STOCK_LIMIT = 10;
+const PRODUCT_CARD_COLORS = [
+  '#ff6600', '#e76f51', '#c44536', '#b94a48', '#a94442',
+  '#d97706', '#e58c2b', '#c96a13', '#b86b1b', '#d95321',
+  '#b7791f', '#c9953f', '#a77b35', '#8f6427', '#72511f',
+  '#27765b', '#3a8d6d', '#4f9b78', '#648e5c', '#6d8b45',
+  '#158c8c', '#1599a8', '#2e9eaa', '#367c8a', '#4d7379',
+  '#3c6ead', '#4f7cac', '#577590', '#5d75a8', '#6b6fa7',
+  '#7655a4', '#8c5fa8', '#9a6ba8', '#a06b86', '#8b5e7a',
+  '#795548', '#8d6e63', '#9a6a4d', '#a86f48', '#6b5a50',
+];
 
 /** Gestiona la tabla y el diálogo de la ventana de Inventario. */
 class InventoryView {
@@ -34,6 +44,11 @@ class InventoryView {
     document.getElementById('confirm-brand').onclick = () => this.addCatalogOption('brand');
     document.getElementById('add-unit').onclick = () => this.toggleNewCatalogField('unit');
     document.getElementById('confirm-unit').onclick = () => this.addCatalogOption('unit');
+    document.getElementById('open-color-palette').onclick = () => this.openColorPalette();
+    document.getElementById('color-options').addEventListener('click', (event) => {
+      const colorOption = event.target.closest('[data-color]');
+      if (colorOption) this.selectCardColor(colorOption.dataset.color);
+    });
   }
 
   isLowStock(product) {
@@ -101,6 +116,7 @@ class InventoryView {
     this.populateProductFields();
     document.querySelector('#product-dialog form').reset();
     document.getElementById('new-min-stock').value = 0;
+    this.updateColorPreview();
     this.hideNewCategoryField();
     this.hideNewCatalogField('brand');
     this.hideNewCatalogField('unit');
@@ -125,6 +141,7 @@ class InventoryView {
     document.getElementById('new-stock').value = product.stock;
     document.getElementById('new-min-stock').value = product.minStock ?? 0;
     document.getElementById('new-color').value = product.color || '#ff6600';
+    this.updateColorPreview();
     this.hideNewCategoryField();
     this.hideNewCatalogField('brand');
     this.hideNewCatalogField('unit');
@@ -262,6 +279,35 @@ class InventoryView {
     this.populateProductFields();
     document.getElementById(`new-${catalog}`).value = name;
     this.hideNewCatalogField(catalog);
+  }
+
+  openColorPalette() {
+    const selectedColor = document.getElementById('new-color').value;
+    document.getElementById('color-options').replaceChildren(...PRODUCT_CARD_COLORS.map((color) => {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'color-option';
+      option.dataset.color = color;
+      option.style.setProperty('--swatch-color', color);
+      option.setAttribute('aria-label', `Seleccionar color ${color}`);
+      option.setAttribute('aria-pressed', String(color === selectedColor));
+      if (color === selectedColor) option.classList.add('selected');
+      return option;
+    }));
+    document.getElementById('color-palette-dialog').showModal();
+  }
+
+  selectCardColor(color) {
+    document.getElementById('new-color').value = color;
+    this.updateColorPreview();
+    document.getElementById('color-palette-dialog').close();
+  }
+
+  updateColorPreview() {
+    const color = document.getElementById('new-color').value || '#ff6600';
+    const trigger = document.getElementById('open-color-palette');
+    trigger.style.setProperty('--selected-color', color);
+    trigger.setAttribute('aria-label', `Elegir color de la tarjeta, color actual ${color}`);
   }
 }
 

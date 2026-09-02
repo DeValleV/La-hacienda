@@ -70,6 +70,29 @@
   border-color: var(--blue);
 }
 
+/* El pago acompaña al total y al cambio en una sola lectura vertical. */
+.totals .payment-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.totals .payment-control label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.totals .payment-control input {
+  width: 128px;
+  padding: 7px 9px;
+  text-align: right;
+}
+
 .payment-suggestions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -90,6 +113,59 @@
   border-color: var(--blue);
   background: var(--soft);
   color: var(--blue);
+}
+
+/* Los importes frecuentes ocupan el espacio libre del catálogo, no el resumen. */
+.payment-shortcuts {
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+}
+
+.payment-shortcuts-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.payment-shortcuts-heading span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.payment-shortcuts .payment-suggestions {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.payment-shortcuts .payment-suggestion {
+  display: grid;
+  position: relative;
+  place-items: center;
+  padding: 13px 10px;
+  font-size: 15px;
+}
+
+.payment-key {
+  position: absolute;
+  left: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+@media (max-width: 600px) {
+  .payment-shortcuts-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .payment-shortcuts .payment-suggestions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .change-total strong {

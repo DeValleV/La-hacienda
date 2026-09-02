@@ -32,7 +32,10 @@ class SalesView {
       if (button.dataset.remove) this.removeFromCart(button.dataset.remove);
     });
     document.getElementById('clear-cart').onclick = () => this.clearCart();
-    document.getElementById('checkout').onclick = () => this.checkout();
+    document.getElementById('checkout-options').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-checkout-type]');
+      if (button) this.checkout(button.dataset.checkoutType);
+    });
     document.getElementById('amount-paid').addEventListener('input', () => {
       this.paymentWasEdited = true;
       this.renderChange();
@@ -40,10 +43,9 @@ class SalesView {
     document.getElementById('payment-suggestions').addEventListener('click', (event) => {
       const button = event.target.closest('[data-payment]');
       if (!button) return;
-      document.getElementById('amount-paid').value = button.dataset.payment;
-      this.paymentWasEdited = true;
-      this.renderChange();
+      this.selectSuggestedPayment(button);
     });
+    document.addEventListener('keydown', (event) => this.handlePaymentShortcut(event));
   }
 
   getProduct(productId) {
@@ -146,11 +148,11 @@ class SalesView {
     const suggestions = [total];
 
     denominations.filter((denomination) => denomination >= total).forEach((denomination) => {
-      if (suggestions.length < 4 && !suggestions.includes(denomination)) suggestions.push(denomination);
+      if (suggestions.length < 6 && !suggestions.includes(denomination)) suggestions.push(denomination);
     });
 
     let nextAmount = Math.ceil(total / 1000) * 1000;
-    while (suggestions.length < 4) {
+    while (suggestions.length < 6) {
       if (!suggestions.includes(nextAmount)) suggestions.push(nextAmount);
       nextAmount += 1000;
     }
@@ -159,8 +161,28 @@ class SalesView {
 
   renderPaymentSuggestions(total) {
     document.getElementById('payment-suggestions').innerHTML = this.getSuggestedPayments(total)
-      .map((amount) => `<button type="button" class="payment-suggestion" data-payment="${amount}">${this.formatMoney(amount)}</button>`)
+      .map((amount, index) => `<button type="button" class="payment-suggestion" data-payment="${amount}" aria-keyshortcuts="${index + 1}" aria-label="${this.formatMoney(amount)}. Atajo ${index + 1}"><span class="payment-key">(${index + 1})</span><span>${this.formatMoney(amount)}</span></button>`)
       .join('');
+  }
+
+  selectSuggestedPayment(button) {
+    document.getElementById('amount-paid').value = button.dataset.payment;
+    this.paymentWasEdited = true;
+    this.renderChange();
+  }
+
+  handlePaymentShortcut(event) {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || document.querySelector('dialog[open]')) return;
+    if (event.target.matches('input, textarea, select, [contenteditable="true"]')) return;
+
+    const shortcut = Number(event.key);
+    if (!Number.isInteger(shortcut) || shortcut < 1) return;
+    const button = document.querySelectorAll('#payment-suggestions [data-payment]')[shortcut - 1];
+    if (!button) return;
+
+    event.preventDefault();
+    this.selectSuggestedPayment(button);
+    button.focus();
   }
 
   renderChange(total = this.getTotal()) {
@@ -202,14 +224,13 @@ class SalesView {
     this.renderOrder();
   }
 
-  checkout() {
+  checkout(tipoVenta) {
     if (!this.cart.length) {
       this.showToast('Agregue al menos un producto al pedido.');
       return;
     }
 
     const lines = this.getCartLines();
-    const tipoVenta = document.querySelector('input[name="sale-type"]:checked').value;
     const total = this.getTotal(lines);
     const amountPaid = this.getAmountPaid();
     if (!Number.isFinite(amountPaid) || amountPaid < total) {
