@@ -1,17 +1,99 @@
 /* Controles del Punto de Venta y desglose por tipo para el cierre. */
 .sale-type-control {
-  display: grid;
-  gap: 7px;
+  border: 0;
+  padding: 0;
   margin: 18px 0 4px;
 }
 
-.sale-type-control label {
+.sale-type-control legend,
+.payment-control label {
   font-size: 12px;
+  font-weight: 700;
+  padding: 0;
 }
 
-.sale-type-control select {
-  width: 100%;
+.choice-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.choice-chip {
+  display: block;
+  cursor: pointer;
+}
+
+.choice-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.choice-chip span {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: #fff;
   font-weight: 700;
+  line-height: 1;
+}
+
+.choice-chip input:checked + span {
+  border-color: var(--blue);
+  background: var(--soft);
+  color: var(--blue);
+}
+
+.choice-chip input:focus-visible + span {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.payment-control {
+  display: grid;
+  gap: 7px;
+  margin: 16px 0 4px;
+}
+
+.payment-control input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 9px 10px;
+  font-weight: 700;
+}
+
+.payment-control input:focus {
+  outline: 2px solid color-mix(in srgb, var(--blue) 35%, transparent);
+  border-color: var(--blue);
+}
+
+.payment-suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.payment-suggestion {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 9px 7px;
+  background: #fafafa;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.payment-suggestion:hover,
+.payment-suggestion:focus-visible {
+  border-color: var(--blue);
+  background: var(--soft);
+  color: var(--blue);
+}
+
+.change-total strong {
+  color: var(--green);
 }
 
 .summary-stats {

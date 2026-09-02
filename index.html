@@ -22,7 +22,11 @@
 
   <main>
     <header>
-      <button class="menu-button">☰</button>
+      <button class="menu-button sidebar-toggle" id="toggle-sidebar" type="button" aria-label="Ocultar menú lateral" aria-expanded="true">☰</button>
+      <div id="sales-header" class="sales-header" hidden>
+        <div><p class="eyebrow">PUNTO DE VENTA</p><h1>Turno activo: Almuerzo</h1></div>
+        <span class="shift-status">● Caja abierta</span>
+      </div>
     </header>
 
     <section id="inventario" class="view">
@@ -48,10 +52,30 @@
     </section>
 
     <section id="ventas" class="view">
-      <div class="pos-heading"><div><p class="eyebrow">PUNTO DE VENTA</p><h1>Turno activo: Almuerzo</h1></div><span class="shift-status">● Caja abierta</span></div>
       <div class="pos-layout">
         <div class="products"><div class="product-heading"><h2>Menú del día</h2><span>Seleccione para agregar al pedido</span></div><div id="product-grid" class="product-grid"></div></div>
-        <aside class="cart"><div class="cart-header"><p class="eyebrow">PEDIDO ACTUAL</p><button id="clear-cart">⌫</button></div><div id="cart-items" class="cart-items"></div><div class="sale-type-control"><label for="sale-type">Tipo de venta</label><select id="sale-type"><option value="COMEDOR">COMEDOR</option><option value="FACTURADA">FACTURADA</option><option value="PERSONAL">PERSONAL</option></select></div><div class="totals"><p class="grand-total"><span>Total a pagar</span><strong id="total">$0.00</strong></p></div><button class="checkout" id="checkout">✓ Cobrar venta</button></aside>
+        <aside class="cart">
+          <div class="cart-header"><p class="eyebrow">PEDIDO ACTUAL</p><button id="clear-cart" aria-label="Vaciar pedido">⌫</button></div>
+          <div id="cart-items" class="cart-items"></div>
+          <fieldset class="sale-type-control">
+            <legend>Tipo de venta</legend>
+            <div class="choice-chips" role="radiogroup" aria-label="Tipo de venta">
+              <label class="choice-chip"><input type="radio" name="sale-type" value="COMEDOR" checked><span>Comedor</span></label>
+              <label class="choice-chip"><input type="radio" name="sale-type" value="FACTURADA"><span>Facturada</span></label>
+              <label class="choice-chip"><input type="radio" name="sale-type" value="PERSONAL"><span>Personal</span></label>
+            </div>
+          </fieldset>
+          <div class="payment-control">
+            <label for="amount-paid">Cantidad pagada</label>
+            <input id="amount-paid" type="number" min="0" step="0.01" inputmode="decimal" aria-describedby="change-amount">
+            <div id="payment-suggestions" class="payment-suggestions" aria-label="Cantidades sugeridas"></div>
+          </div>
+          <div class="totals">
+            <p class="grand-total"><span>Total a pagar</span><strong id="total">$0.00</strong></p>
+            <p class="change-total"><span>Cambio</span><strong id="change-amount">$0.00</strong></p>
+          </div>
+          <button class="checkout" id="checkout">✓ Cobrar venta</button>
+        </aside>
       </div>
     </section>
 
@@ -99,6 +123,7 @@
       <label>Código del producto<input id="new-sku" required placeholder="Ej. 50012"></label>
       <label>Precio<input id="new-price" required type="number" min="0" step="0.01"></label>
       <label>Existencias<input id="new-stock" required type="number" min="0"></label>
+      <label>Color de la tarjeta<input id="new-color" required type="color" value="#ff6600"></label>
       <div class="dialog-actions"><button class="secondary" value="cancel">Cancelar</button><button class="primary" id="save-product" value="default">Guardar producto</button></div>
     </form>
   </dialog>

@@ -1,9 +1,9 @@
 // Datos iniciales de la aplicación. En producción vendrían de una API.
 const products = [
-  { id: 1, name: 'Menú del Día', sku: '10010', category: 'Alimentos', price: 5.5, stock: 64, icon: '🍽' },
-  { id: 2, name: 'Bebida Cola 500ml', sku: '20054', category: 'Bebidas', price: 1.2, stock: 8, icon: '🥤' },
-  { id: 3, name: 'Postre Gelatina', sku: '30122', category: 'Postres', price: 0.8, stock: 31, icon: '🍮' },
-  { id: 4, name: 'Café Americano', sku: '40010', category: 'Bebidas', price: 1, stock: 42, icon: '☕' },
+  { id: 1, name: 'Menú del Día', sku: '10010', category: 'Alimentos', price: 5.5, stock: 64, color: '#ff6600' },
+  { id: 2, name: 'Bebida Cola 500ml', sku: '20054', category: 'Bebidas', price: 1.2, stock: 8, color: '#1599a8' },
+  { id: 3, name: 'Postre Gelatina', sku: '30122', category: 'Postres', price: 0.8, stock: 31, color: '#d97706' },
+  { id: 4, name: 'Café Americano', sku: '40010', category: 'Bebidas', price: 1, stock: 42, color: '#795548' },
 ];
 
 // Cada cobro se conserva como una venta independiente para poder auditarla por tipo.
@@ -38,6 +38,7 @@ class PointOfSaleApp {
     });
 
     this.bindNavigation();
+    this.bindSidebarToggle();
     this.renderAll();
     this.showView('ventas');
   }
@@ -56,6 +57,15 @@ class PointOfSaleApp {
     });
   }
 
+  bindSidebarToggle() {
+    const toggle = document.getElementById('toggle-sidebar');
+    toggle.addEventListener('click', () => {
+      const isHidden = document.body.classList.toggle('sidebar-hidden');
+      toggle.setAttribute('aria-expanded', String(!isHidden));
+      toggle.setAttribute('aria-label', isHidden ? 'Mostrar menú lateral' : 'Ocultar menú lateral');
+    });
+  }
+
   showView(viewId) {
     document.querySelectorAll('.view').forEach((view) => {
       view.classList.toggle('active', view.id === viewId);
@@ -63,6 +73,7 @@ class PointOfSaleApp {
     document.querySelectorAll('[data-view]').forEach((button) => {
       button.classList.toggle('active', button.dataset.view === viewId);
     });
+    document.getElementById('sales-header').hidden = viewId !== 'ventas';
   }
 
   showToast(message) {

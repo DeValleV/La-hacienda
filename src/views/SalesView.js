@@ -7,6 +7,7 @@ class SalesView {
     this.showToast = showToast;
     this.onSaleCompleted = onSaleCompleted;
     this.cart = [];
+    this.paymentWasEdited = false;
     this.bindEvents();
   }
 
@@ -25,6 +26,17 @@ class SalesView {
     });
     document.getElementById('clear-cart').onclick = () => this.clearCart();
     document.getElementById('checkout').onclick = () => this.checkout();
+    document.getElementById('amount-paid').addEventListener('input', () => {
+      this.paymentWasEdited = true;
+      this.renderChange();
+    });
+    document.getElementById('payment-suggestions').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-payment]');
+      if (!button) return;
+      document.getElementById('amount-paid').value = button.dataset.payment;
+      this.paymentWasEdited = true;
+      this.renderChange();
+    });
   }
 
   getProduct(productId) {
@@ -44,10 +56,9 @@ class SalesView {
 
   renderProductMenu() {
     document.getElementById('product-grid').innerHTML = this.products.map((product) => `
-      <article class="product-card" data-add="${product.id}" style="cursor: pointer;">
-        <span class="icon-box">${product.icon}</span>
+      <article class="product-card" data-add="${product.id}" style="--product-color: ${product.color || '#ff6600'}; cursor: pointer;">
         <h3>${product.name}</h3>
-        <small>Código del producto: ${product.sku} · ${product.stock} disponibles</small>
+        <small>${product.sku} · ${product.stock} disponibles</small>
         <footer>
           <strong>${this.formatMoney(product.price)}</strong>
         </footer>
@@ -72,8 +83,49 @@ class SalesView {
         </div>`).join('')
       : '<p class="muted">Aún no hay productos en el pedido.</p>';
 
-    const total = lines.reduce((sum, line) => sum + line.product.price * line.qty, 0);
+    const total = this.getTotal(lines);
     document.getElementById('total').textContent = this.formatMoney(total);
+
+    const amountPaid = document.getElementById('amount-paid');
+    if (!this.paymentWasEdited) amountPaid.value = total.toFixed(2);
+    this.renderPaymentSuggestions(total);
+    this.renderChange(total);
+  }
+
+  getTotal(lines = this.getCartLines()) {
+    return lines.reduce((sum, line) => sum + line.product.price * line.qty, 0);
+  }
+
+  getAmountPaid() {
+    return Number(document.getElementById('amount-paid').value);
+  }
+
+  getSuggestedPayments(total) {
+    const denominations = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+    const suggestions = [total];
+
+    denominations.filter((denomination) => denomination >= total).forEach((denomination) => {
+      if (suggestions.length < 4 && !suggestions.includes(denomination)) suggestions.push(denomination);
+    });
+
+    let nextAmount = Math.ceil(total / 1000) * 1000;
+    while (suggestions.length < 4) {
+      if (!suggestions.includes(nextAmount)) suggestions.push(nextAmount);
+      nextAmount += 1000;
+    }
+    return suggestions;
+  }
+
+  renderPaymentSuggestions(total) {
+    document.getElementById('payment-suggestions').innerHTML = this.getSuggestedPayments(total)
+      .map((amount) => `<button type="button" class="payment-suggestion" data-payment="${amount}">${this.formatMoney(amount)}</button>`)
+      .join('');
+  }
+
+  renderChange(total = this.getTotal()) {
+    const amountPaid = this.getAmountPaid();
+    const change = Number.isFinite(amountPaid) ? Math.max(0, amountPaid - total) : 0;
+    document.getElementById('change-amount').textContent = this.formatMoney(change);
   }
 
   addToCart(productId) {
@@ -105,6 +157,7 @@ class SalesView {
 
   clearCart() {
     this.cart = [];
+    this.paymentWasEdited = false;
     this.renderOrder();
   }
 
@@ -115,14 +168,21 @@ class SalesView {
     }
 
     const lines = this.getCartLines();
-    const tipoVenta = document.getElementById('sale-type').value;
-    const total = lines.reduce((sum, line) => sum + line.product.price * line.qty, 0);
+    const tipoVenta = document.querySelector('input[name="sale-type"]:checked').value;
+    const total = this.getTotal(lines);
+    const amountPaid = this.getAmountPaid();
+    if (!Number.isFinite(amountPaid) || amountPaid < total) {
+      this.showToast('La cantidad pagada debe cubrir el total de la venta.');
+      return;
+    }
 
     // Este objeto es el payload de la venta; incluye el tipo seleccionado al cobrar.
     const salePayload = {
       id: Date.now(),
       tipoVenta,
       total,
+      amountPaid,
+      change: amountPaid - total,
       lines: lines.map(({ product, qty }) => ({
         productId: product.id,
         productName: product.name,
@@ -137,6 +197,7 @@ class SalesView {
     });
     this.salesHistory.push(salePayload);
     this.cart = [];
+    this.paymentWasEdited = false;
     this.onSaleCompleted();
     this.showToast(`Venta ${tipoVenta.toLowerCase()} cobrada y existencias actualizadas.`);
   }

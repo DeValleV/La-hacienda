@@ -104,6 +104,7 @@ class InventoryView {
     document.getElementById('new-sku').value = product.sku;
     document.getElementById('new-price').value = product.price;
     document.getElementById('new-stock').value = product.stock;
+    document.getElementById('new-color').value = product.color || '#ff6600';
     document.getElementById('product-dialog').showModal();
   }
 
@@ -124,6 +125,7 @@ class InventoryView {
     const sku = document.getElementById('new-sku').value;
     const price = Number(document.getElementById('new-price').value);
     const stock = Number(document.getElementById('new-stock').value);
+    const color = document.getElementById('new-color').value;
 
     // Evita cerrar el diálogo cuando los datos ingresados no son válidos.
     if (!name || !sku || Number.isNaN(price) || Number.isNaN(stock)) {
@@ -138,9 +140,10 @@ class InventoryView {
       editingProduct.sku = sku;
       editingProduct.price = price;
       editingProduct.stock = stock;
+      editingProduct.color = color;
     } else {
       this.products.push({
-        id: Date.now(), name, sku, category: 'General', price, stock, icon: '📦',
+        id: Date.now(), name, sku, category: 'General', price, stock, color,
       });
     }
 
