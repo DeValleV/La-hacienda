@@ -159,19 +159,8 @@ class SalesView {
   }
 
   getSuggestedPayments(total) {
-    const denominations = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
-    const suggestions = [total];
-
-    denominations.filter((denomination) => denomination >= total).forEach((denomination) => {
-      if (suggestions.length < 6 && !suggestions.includes(denomination)) suggestions.push(denomination);
-    });
-
-    let nextAmount = Math.ceil(total / 1000) * 1000;
-    while (suggestions.length < 6) {
-      if (!suggestions.includes(nextAmount)) suggestions.push(nextAmount);
-      nextAmount += 1000;
-    }
-    return suggestions;
+    const denominations = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+    return denominations.filter((denomination) => denomination > total);
   }
 
   renderPaymentSuggestions(total) {
@@ -189,6 +178,13 @@ class SalesView {
   handlePaymentShortcut(event) {
     if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || document.querySelector('dialog[open]')) return;
     if (event.target.matches('input, textarea, select, [contenteditable="true"]')) return;
+
+    const checkoutType = { j: 'COMEDOR', k: 'FACTURADA', l: 'PERSONAL' }[event.key.toLowerCase()];
+    if (checkoutType) {
+      event.preventDefault();
+      this.checkout(checkoutType);
+      return;
+    }
 
     const shortcut = Number(event.key);
     if (!Number.isInteger(shortcut) || shortcut < 1) return;
