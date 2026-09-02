@@ -31,6 +31,10 @@ class SalesView {
       if (button.dataset.change) this.changeCartQuantity(button.dataset.change, button.dataset.delta);
       if (button.dataset.remove) this.removeFromCart(button.dataset.remove);
     });
+    document.getElementById('cart-items').addEventListener('change', (event) => {
+      const input = event.target.closest('[data-quantity]');
+      if (input) this.setCartQuantity(input.dataset.quantity, input.value);
+    });
     document.getElementById('clear-cart').onclick = () => this.clearCart();
     document.getElementById('checkout-options').addEventListener('click', (event) => {
       const button = event.target.closest('[data-checkout-type]');
@@ -39,6 +43,17 @@ class SalesView {
     document.getElementById('amount-paid').addEventListener('input', () => {
       this.paymentWasEdited = true;
       this.renderChange();
+    });
+    const moveCaretToEnd = (event) => {
+      const input = event.target.closest('.numeric-input');
+      if (!input || (event.type === 'click' && event.detail > 1)) return;
+      requestAnimationFrame(() => input.setSelectionRange(input.value.length, input.value.length));
+    };
+    document.addEventListener('focusin', moveCaretToEnd);
+    document.addEventListener('click', moveCaretToEnd);
+    document.addEventListener('dblclick', (event) => {
+      const input = event.target.closest('.numeric-input');
+      if (input) input.select();
     });
     document.getElementById('payment-suggestions').addEventListener('click', (event) => {
       const button = event.target.closest('[data-payment]');
@@ -80,8 +95,8 @@ class SalesView {
     const createProductCard = (product) => `
       <article class="product-card" data-add="${product.id}" style="--product-color: ${product.color || '#ff6600'}; cursor: pointer;">
         <h3>${product.name}</h3>
-        <small>${product.sku} · ${product.stock} disponibles</small>
         <footer>
+          <small>${product.sku} · ${product.stock} disponibles</small>
           <strong>${this.formatMoney(product.price)}</strong>
         </footer>
       </article>`;
@@ -111,17 +126,17 @@ class SalesView {
     document.getElementById('cart-items').innerHTML = lines.length
       ? lines.map(({ product, qty }) => `
         <div class="cart-item">
-          <header>
-            <span>${product.name}</span>
-            <button data-remove="${product.id}">×</button>
-          </header>
-          <div class="quantity">
+          <div class="cart-item-row">
+            <span class="cart-item-name" title="${product.name}">${product.name}</span>
+            <div class="quantity">
             <div class="quantity-stepper" aria-label="Cantidad de ${product.name}">
               <button type="button" data-change="${product.id}" data-delta="-1" aria-label="Reducir cantidad de ${product.name}">−</button>
-            <span>${qty}</span>
+              <input class="cart-quantity-input numeric-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${qty}" data-quantity="${product.id}" aria-label="Cantidad de ${product.name}">
               <button type="button" data-change="${product.id}" data-delta="1" aria-label="Aumentar cantidad de ${product.name}">＋</button>
             </div>
+            </div>
             <b>${this.formatMoney(product.price * qty)}</b>
+            <button class="cart-item-remove" type="button" data-remove="${product.id}" aria-label="Eliminar ${product.name}">×</button>
           </div>
         </div>`).join('')
       : '<p class="muted">Aún no hay productos en el pedido.</p>';
@@ -210,6 +225,18 @@ class SalesView {
     if (!line) return;
     line.qty += Number(delta);
     if (line.qty < 1) this.cart = this.cart.filter((item) => item !== line);
+    this.renderOrder();
+  }
+
+  setCartQuantity(productId, quantity) {
+    const line = this.cart.find((item) => item.id === Number(productId));
+    const product = this.getProduct(productId);
+    const parsedQuantity = Number.parseInt(quantity, 10);
+    if (!line || !product || !Number.isInteger(parsedQuantity) || parsedQuantity < 1) {
+      this.renderOrder();
+      return;
+    }
+    line.qty = Math.min(parsedQuantity, product.stock);
     this.renderOrder();
   }
 

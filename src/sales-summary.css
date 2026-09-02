@@ -136,8 +136,9 @@
 }
 
 .payment-shortcuts .payment-suggestions {
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
   gap: 10px;
+  overflow-x: auto;
 }
 
 .payment-shortcuts .payment-suggestion {
@@ -164,7 +165,7 @@
   }
 
   .payment-shortcuts .payment-suggestions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(110px, 1fr));
   }
 }
 

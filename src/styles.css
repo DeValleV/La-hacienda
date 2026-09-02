@@ -85,11 +85,16 @@ nav button.active {
   box-shadow: inset 3px 0 var(--blue);
 }
 
-nav i, .sidebar-bottom i {
-  font-style: normal;
-  font-size: 18px;
-  display: inline-block;
-  width: 26px;
+nav svg, .sidebar-bottom svg {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  vertical-align: -5px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .sidebar-bottom {
@@ -380,7 +385,7 @@ td:first-child {
    ========================================= */
 .pos-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 400px;
   gap: 20px;
   height: 100%;
   min-height: 0;
@@ -477,7 +482,7 @@ td:first-child {
   border-top: 4px solid var(--product-color, var(--blue));
   border-radius: 7px;
   padding: 9px 11px;
-  min-height: 84px;
+  min-height: 56px;
   display: flex;
   flex-direction: column;
   align-items: start;
@@ -506,7 +511,7 @@ td:first-child {
   justify-content: space-between;
   width: 100%;
   align-items: center;
-  margin-top: 2px;
+  margin-top: 0;
 }
 
 .product-card strong {
@@ -536,6 +541,7 @@ td:first-child {
 .cart-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--line);
 }
@@ -546,11 +552,11 @@ td:first-child {
 }
 
 .cart-header .clear-cart-button {
-  padding: 5px 9px;
+  padding: 3px 7px;
   border: 1px solid color-mix(in srgb, var(--danger) 32%, var(--line));
   border-radius: 5px;
   color: var(--danger);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -566,35 +572,45 @@ td:first-child {
 }
 
 .cart-item {
-  padding: 16px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--line);
 }
 
-.cart-item header {
-  height: auto;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  display: flex;
-  justify-content: space-between;
+.cart-item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px 50px 16px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cart-item-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 700;
 }
 
-.cart-item header button {
+.cart-item-remove {
+  flex: none;
   color: var(--danger);
+  font-size: 16px;
+  line-height: 1;
 }
 
 .quantity {
   display: flex;
+  flex: none;
   align-items: center;
-  margin-top: 10px;
   color: var(--muted);
 }
 
 .quantity-stepper {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 5px;
 }
 
 .quantity-stepper button {
@@ -604,15 +620,21 @@ td:first-child {
   height: 24px;
 }
 
-.quantity-stepper span {
-  min-width: 13px;
+.cart-quantity-input {
+  width: 22px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   text-align: center;
+  color: inherit;
 }
 
-.quantity b {
-  margin-left: auto;
+.cart-item-row > b {
+  flex: none;
   color: #555;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 /* Totales y Cobro */
@@ -723,6 +745,19 @@ dialog form {
   padding: 24px;
   display: grid;
   gap: 15px;
+}
+
+#product-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  overflow-x: hidden;
+}
+
+#product-dialog form,
+#product-dialog .product-form-grid,
+#product-dialog label {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .product-form-grid {
@@ -904,6 +939,9 @@ label input {
   }
   .sidebar i {
     font-size: 19px;
+  }
+  .sidebar svg {
+    margin-right: 0;
   }
   .new-sale {
     font-size: 0;
