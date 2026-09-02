@@ -53,7 +53,16 @@
 
     <section id="ventas" class="view">
       <div class="pos-layout">
-        <div class="products"><div class="product-heading"><h2>Menú del día</h2><span>Seleccione para agregar al pedido</span></div><div id="product-grid" class="product-grid"></div></div>
+        <div class="products">
+          <div class="product-heading">
+            <div>
+              <h2>Productos</h2>
+              <span>Seleccione para agregar al pedido</span>
+            </div>
+            <div id="category-filters" class="category-filters" role="tablist" aria-label="Filtrar productos por categoría"></div>
+          </div>
+          <div id="product-grid" class="product-grid"></div>
+        </div>
         <aside class="cart">
           <div class="cart-header"><p class="eyebrow">PEDIDO ACTUAL</p><button id="clear-cart" aria-label="Vaciar pedido">⌫</button></div>
           <div id="cart-items" class="cart-items"></div>
@@ -119,11 +128,39 @@
   <dialog id="product-dialog">
     <form method="dialog">
       <div class="dialog-head"><h2>Nuevo producto</h2><button>×</button></div>
-      <label>Nombre<input id="new-name" required placeholder="Ej. Agua natural 600 ml"></label>
-      <label>Código del producto<input id="new-sku" required placeholder="Ej. 50012"></label>
-      <label>Precio<input id="new-price" required type="number" min="0" step="0.01"></label>
-      <label>Existencias<input id="new-stock" required type="number" min="0"></label>
-      <label>Color de la tarjeta<input id="new-color" required type="color" value="#ff6600"></label>
+      <div class="product-form-grid">
+        <div class="field-group">
+          <label for="new-category">Categoría</label>
+          <div class="field-with-action"><select id="new-category" required></select><button id="add-category" class="icon-action" type="button" aria-label="Agregar nueva categoría" title="Agregar nueva categoría">＋</button></div>
+          <div id="new-category-field" class="new-category-field" hidden>
+            <input id="new-category-name" type="text" placeholder="Nombre de la categoría" maxlength="80">
+            <button id="confirm-category" class="secondary" type="button">Agregar</button>
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="new-brand">Marca</label>
+          <div class="field-with-action"><select id="new-brand" required></select><button id="add-brand" class="icon-action" type="button" aria-label="Agregar nueva marca" title="Agregar nueva marca">＋</button></div>
+          <div id="new-brand-field" class="new-catalog-field" hidden>
+            <input id="new-brand-name" type="text" placeholder="Nombre de la marca" maxlength="80">
+            <button id="confirm-brand" class="secondary" type="button">Agregar</button>
+          </div>
+        </div>
+        <label class="full-width">Nombre base<input id="new-name" required placeholder="Ej. Agua natural"></label>
+        <label>Código SKU<input id="new-sku" required placeholder="Ej. 50012"></label>
+        <div class="field-group">
+          <label for="new-unit">Unidad de medida</label>
+          <div class="field-with-action"><select id="new-unit" required></select><button id="add-unit" class="icon-action" type="button" aria-label="Agregar nueva unidad de medida" title="Agregar nueva unidad de medida">＋</button></div>
+          <div id="new-unit-field" class="new-catalog-field" hidden>
+            <input id="new-unit-name" type="text" placeholder="Ej. caja, paquete, ml" maxlength="80">
+            <button id="confirm-unit" class="secondary" type="button">Agregar</button>
+          </div>
+        </div>
+        <label>Estado<select id="new-status" required></select></label>
+        <label>Precio<input id="new-price" required type="number" min="0" step="0.01"></label>
+        <label>Existencias<input id="new-stock" required type="number" min="0" step="0.01"></label>
+        <label>Stock mínimo<input id="new-min-stock" required type="number" min="0" step="0.01"></label>
+        <label>Color de la tarjeta<input id="new-color" required type="color" value="#ff6600"></label>
+      </div>
       <div class="dialog-actions"><button class="secondary" value="cancel">Cancelar</button><button class="primary" id="save-product" value="default">Guardar producto</button></div>
     </form>
   </dialog>

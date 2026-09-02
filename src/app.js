@@ -1,9 +1,9 @@
 // Datos iniciales de la aplicación. En producción vendrían de una API.
 const products = [
-  { id: 1, name: 'Menú del Día', sku: '10010', category: 'Alimentos', price: 5.5, stock: 64, color: '#ff6600' },
-  { id: 2, name: 'Bebida Cola 500ml', sku: '20054', category: 'Bebidas', price: 1.2, stock: 8, color: '#1599a8' },
-  { id: 3, name: 'Postre Gelatina', sku: '30122', category: 'Postres', price: 0.8, stock: 31, color: '#d97706' },
-  { id: 4, name: 'Café Americano', sku: '40010', category: 'Bebidas', price: 1, stock: 42, color: '#795548' },
+  { id: 1, name: 'Menú del Día', sku: '10010', category: 'Alimentos', brand: 'La Hacienda', unit: 'pieza', status: 'activo', price: 5.5, stock: 64, minStock: 10, color: '#ff6600' },
+  { id: 2, name: 'Bebida Cola 500ml', sku: '20054', category: 'Bebidas', brand: 'Cola', unit: 'botella', status: 'activo', price: 1.2, stock: 8, minStock: 10, color: '#1599a8' },
+  { id: 3, name: 'Postre Gelatina', sku: '30122', category: 'Postres', brand: 'La Hacienda', unit: 'pieza', status: 'activo', price: 0.8, stock: 31, minStock: 10, color: '#d97706' },
+  { id: 4, name: 'Café Americano', sku: '40010', category: 'Bebidas', brand: 'La Hacienda', unit: 'vaso', status: 'activo', price: 1, stock: 42, minStock: 10, color: '#795548' },
 ];
 
 // Cada cobro se conserva como una venta independiente para poder auditarla por tipo.

@@ -7,6 +7,7 @@ class SalesView {
     this.showToast = showToast;
     this.onSaleCompleted = onSaleCompleted;
     this.cart = [];
+    this.activeCategory = 'all';
     this.paymentWasEdited = false;
     this.bindEvents();
   }
@@ -16,6 +17,12 @@ class SalesView {
       // Ahora busca la tarjeta completa en lugar del botón
       const card = event.target.closest('[data-add]');
       if (card) this.addToCart(card.dataset.add);
+    });
+    document.getElementById('category-filters').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-category]');
+      if (!button) return;
+      this.activeCategory = button.dataset.category;
+      this.renderProductMenu();
     });
     
     document.getElementById('cart-items').addEventListener('click', (event) => {
@@ -55,14 +62,46 @@ class SalesView {
   }
 
   renderProductMenu() {
-    document.getElementById('product-grid').innerHTML = this.products.map((product) => `
+    // La base de datos no permite vender SKU inactivos o descontinuados.
+    const sellableProducts = this.products.filter((product) => !product.status || product.status === 'activo');
+    const categories = [...new Set(sellableProducts.map((product) => product.category))];
+    if (this.activeCategory !== 'all' && !categories.includes(this.activeCategory)) {
+      this.activeCategory = 'all';
+    }
+
+    document.getElementById('category-filters').innerHTML = [
+      ['all', 'Todos'],
+      ...categories.map((category) => [category, category]),
+    ].map(([category, label]) => `
+      <button type="button" class="category-filter${this.activeCategory === category ? ' active' : ''}" data-category="${category}" role="tab" aria-selected="${this.activeCategory === category}">${label}</button>`).join('');
+
+    const createProductCard = (product) => `
       <article class="product-card" data-add="${product.id}" style="--product-color: ${product.color || '#ff6600'}; cursor: pointer;">
         <h3>${product.name}</h3>
         <small>${product.sku} · ${product.stock} disponibles</small>
         <footer>
           <strong>${this.formatMoney(product.price)}</strong>
         </footer>
-      </article>`).join('');
+      </article>`;
+
+    const menu = document.getElementById('product-grid');
+    if (this.activeCategory === 'all') {
+      menu.classList.add('grouped-products');
+      menu.innerHTML = categories.map((category) => {
+        const categoryProducts = sellableProducts.filter((product) => product.category === category);
+        return `<section class="product-category" aria-labelledby="category-${category}">
+          <h3 id="category-${category}">${category}</h3>
+          <div class="product-category-grid">${categoryProducts.map(createProductCard).join('')}</div>
+        </section>`;
+      }).join('');
+      return;
+    }
+
+    menu.classList.remove('grouped-products');
+    menu.innerHTML = sellableProducts
+      .filter((product) => product.category === this.activeCategory)
+      .map(createProductCard)
+      .join('');
   }
 
   renderOrder() {
@@ -75,9 +114,11 @@ class SalesView {
             <button data-remove="${product.id}">×</button>
           </header>
           <div class="quantity">
-            <button data-change="${product.id}" data-delta="-1">−</button>
+            <div class="quantity-stepper" aria-label="Cantidad de ${product.name}">
+              <button type="button" data-change="${product.id}" data-delta="-1" aria-label="Reducir cantidad de ${product.name}">−</button>
             <span>${qty}</span>
-            <button data-change="${product.id}" data-delta="1">＋</button>
+              <button type="button" data-change="${product.id}" data-delta="1" aria-label="Aumentar cantidad de ${product.name}">＋</button>
+            </div>
             <b>${this.formatMoney(product.price * qty)}</b>
           </div>
         </div>`).join('')
