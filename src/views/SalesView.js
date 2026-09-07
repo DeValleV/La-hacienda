@@ -55,11 +55,6 @@ class SalesView {
       const input = event.target.closest('.numeric-input');
       if (input) input.select();
     });
-    document.getElementById('payment-suggestions').addEventListener('click', (event) => {
-      const button = event.target.closest('[data-payment]');
-      if (!button) return;
-      this.selectSuggestedPayment(button);
-    });
     document.addEventListener('keydown', (event) => this.handlePaymentShortcut(event));
   }
 
@@ -146,7 +141,6 @@ class SalesView {
 
     const amountPaid = document.getElementById('amount-paid');
     if (!this.paymentWasEdited) amountPaid.value = total.toFixed(2);
-    this.renderPaymentSuggestions(total);
     this.renderChange(total);
   }
 
@@ -156,23 +150,6 @@ class SalesView {
 
   getAmountPaid() {
     return Number(document.getElementById('amount-paid').value);
-  }
-
-  getSuggestedPayments(total) {
-    const denominations = [1, 2, 5, 10, 20, 50, 100, 200, 500];
-    return denominations.filter((denomination) => denomination > total);
-  }
-
-  renderPaymentSuggestions(total) {
-    document.getElementById('payment-suggestions').innerHTML = this.getSuggestedPayments(total)
-      .map((amount, index) => `<button type="button" class="payment-suggestion" data-payment="${amount}" aria-keyshortcuts="${index + 1}" aria-label="${this.formatMoney(amount)}. Atajo ${index + 1}"><span class="payment-key">(${index + 1})</span><span>${this.formatMoney(amount)}</span></button>`)
-      .join('');
-  }
-
-  selectSuggestedPayment(button) {
-    document.getElementById('amount-paid').value = button.dataset.payment;
-    this.paymentWasEdited = true;
-    this.renderChange();
   }
 
   handlePaymentShortcut(event) {
@@ -186,14 +163,6 @@ class SalesView {
       return;
     }
 
-    const shortcut = Number(event.key);
-    if (!Number.isInteger(shortcut) || shortcut < 1) return;
-    const button = document.querySelectorAll('#payment-suggestions [data-payment]')[shortcut - 1];
-    if (!button) return;
-
-    event.preventDefault();
-    this.selectSuggestedPayment(button);
-    button.focus();
   }
 
   renderChange(total = this.getTotal()) {
