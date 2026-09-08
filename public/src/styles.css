@@ -1223,6 +1223,30 @@ dialog::backdrop {
 .login-submit { width: 100%; padding: 12px; }
 .login-error { margin: 0; color: var(--danger); font-weight: 700; }
 .login-help { margin: 0; font-size: 12px; }
+.logout-button { margin-top: 8px; padding: 10px 12px; text-align: left; color: var(--danger); font-weight: 700; }
+.session-user { margin-top: auto; padding: 12px; color: var(--muted); font-size: 12px; line-height: 1.5; border-top: 1px solid var(--line); }
+.sidebar-bottom { margin-top: 0; }
+.app-loading { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(255,255,255,.72); color: var(--navy); font-weight: 800; backdrop-filter: blur(2px); }
+.app-loading[hidden] { display: none; }
+.settings-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.settings-tabs .active { border-color: var(--blue); color: var(--blue); background: var(--soft); }
+.settings-panel { padding: 20px; }
+.settings-panel[hidden] { display: none; }
+.settings-form { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 14px; margin-bottom: 22px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.settings-form.compact { grid-template-columns: 220px 1fr auto; align-items: end; }
+.settings-form input, .settings-form select { width: 100%; padding: 9px; border: 1px solid var(--line); border-radius: 5px; background: #fff; }
+.settings-checkbox { display: flex; align-items: center; gap: 8px; }
+.settings-checkbox input { width: auto; }
+.catalog-list { display: grid; gap: 8px; }
+.catalog-item { display: flex; justify-content: space-between; align-items: center; padding: 11px 4px; border-bottom: 1px solid var(--line); }
+button:disabled { cursor: not-allowed; opacity: .55; }
+.product-card[data-add] { cursor: pointer; }
+.product-card[aria-disabled="true"] { cursor: not-allowed; opacity: .55; }
+
+@media (max-width: 700px) {
+  .settings-form, .settings-form.compact { grid-template-columns: 1fr; }
+  .settings-tabs { overflow-x: auto; }
+}
 
 @media (max-width: 600px) {
   .product-grid {

@@ -1,8 +1,9 @@
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = __dirname;
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -14,7 +15,7 @@ const server = http.createServer((req, res) => {
   const route = urlPath === '/' ? '/index.html' : urlPath;
   const filePath = path.resolve(root, `.${route}`);
 
-  if (!filePath.startsWith(root)) {
+  if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
     res.writeHead(403);
     return res.end('Forbidden');
   }

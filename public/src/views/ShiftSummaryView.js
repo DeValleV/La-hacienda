@@ -1,4 +1,3 @@
-const SHIFT_LOW_STOCK_LIMIT = 10;
 const SALE_TYPES = [
   { value: 'COMEDOR', label: 'Comedor' },
   { value: 'FACTURADA', label: 'Facturada' },
@@ -7,19 +6,23 @@ const SALE_TYPES = [
 
 /** Gestiona las métricas y la auditoría del cierre de turno por tipo de venta. */
 class ShiftSummaryView {
-  constructor({ products, salesHistory, formatMoney, showToast }) {
+  constructor({ products, salesHistory, formatMoney, showToast, onToggleShift }) {
     this.products = products;
     this.salesHistory = salesHistory;
     this.formatMoney = formatMoney;
     this.showToast = showToast;
-    document.getElementById('close-shift').onclick = () => {
-      this.showToast('Turno finalizado. El reporte está listo para exportar.');
-    };
+    this.onToggleShift = onToggleShift;
+    this.shift = null;
+    document.getElementById('close-shift').onclick = () => this.onToggleShift();
+  }
+
+  setShift(shift) {
+    this.shift = shift;
   }
 
   getSalesByType() {
     return SALE_TYPES.map((type) => {
-      const sales = this.salesHistory.filter((sale) => sale.tipoVenta === type.value);
+      const sales = this.salesHistory.filter((sale) => sale.turnId === this.shift?.id && sale.tipoVenta === type.value);
       const products = new Map();
 
       sales.forEach((sale) => {
@@ -44,7 +47,7 @@ class ShiftSummaryView {
     const totalSales = salesByType.reduce((sum, type) => sum + type.total, 0);
     const totalPortions = salesByType.reduce((sum, type) => sum + type.portions, 0);
     const lowStockCount = this.products.filter(
-      (product) => product.stock <= SHIFT_LOW_STOCK_LIMIT,
+      (product) => product.status === 'activo' && product.stock <= product.minStock,
     ).length;
 
     document.getElementById('summary-sales').textContent = this.formatMoney(totalSales);
@@ -61,6 +64,26 @@ class ShiftSummaryView {
     document.getElementById('summary-stock').textContent = `${lowStockCount} alerta${lowStockCount === 1 ? '' : 's'}`;
 
     document.getElementById('sales-report').innerHTML = this.renderSalesReport(salesByType);
+    const button = document.getElementById('close-shift');
+    const isOpen = this.shift?.status === 'abierto';
+    button.textContent = isOpen ? '✓ Finalizar turno' : '＋ Iniciar turno';
+    const period = document.getElementById('shift-period');
+    if (!this.shift) {
+      period.textContent = 'No hay un turno abierto.';
+    } else if (isOpen) {
+      period.textContent = `Turno #${this.shift.id} · abierto ${this.formatDate(this.shift.openedAt)} por ${this.shift.openedBy}`;
+    } else {
+      period.textContent = `Turno #${this.shift.id} · cerrado ${this.formatDate(this.shift.closedAt)} por ${this.shift.closedBy} · abrió ${this.shift.openedBy}`;
+    }
+    const status = document.querySelector('.shift-status');
+    status.textContent = isOpen ? '● Caja abierta' : '● Caja cerrada';
+    status.classList.toggle('low', !isOpen);
+  }
+
+  formatDate(value) {
+    const text = String(value);
+    const date = new Date(/[zZ]$|[+-]\d\d:\d\d$/.test(text) ? text : `${text.replace(' ', 'T')}Z`);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('es-MX');
   }
 
   renderSalesReport(salesByType) {
@@ -82,7 +105,7 @@ class ShiftSummaryView {
     return products.map((product) => `
       <div class="report-row">
         <div>
-          <strong>${product.productName}</strong>
+          <strong>${escapeHtml(product.productName)}</strong>
           <div class="bar"><span style="width:${(product.qty / maxQuantity) * 100}%"></span></div>
         </div>
         <span>${product.qty} porciones</span>

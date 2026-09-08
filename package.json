@@ -1,1 +1,20 @@
-{"name":"gestion-comedor-industrial","version":"1.0.0","private":true,"scripts":{"start":"node server.js"}}
+{
+  "name": "gestion-comedor-industrial",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "wrangler dev",
+    "dev": "wrangler dev",
+    "serve:static": "node server.js",
+    "db:migrate:local": "wrangler d1 migrations apply la-hacienda --local",
+    "db:migrate:staging": "wrangler d1 migrations apply la-hacienda-staging --remote",
+    "db:migrate:production": "wrangler d1 migrations apply la-hacienda --remote",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy": "wrangler deploy",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

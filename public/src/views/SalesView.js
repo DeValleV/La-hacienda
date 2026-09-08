@@ -1,15 +1,21 @@
 /** Gestiona el catálogo, el carrito y el cobro de la ventana de Ventas. */
 class SalesView {
-  constructor({ products, salesHistory, formatMoney, showToast, onSaleCompleted }) {
+  constructor({ products, salesHistory, formatMoney, showToast, onCheckout }) {
     this.products = products;
     this.salesHistory = salesHistory;
     this.formatMoney = formatMoney;
     this.showToast = showToast;
-    this.onSaleCompleted = onSaleCompleted;
+    this.onCheckout = onCheckout;
     this.cart = [];
     this.activeCategory = 'all';
     this.paymentWasEdited = false;
+    this.isCheckingOut = false;
+    this.isShiftOpen = false;
     this.bindEvents();
+  }
+
+  setShiftOpen(isOpen) {
+    this.isShiftOpen = Boolean(isOpen);
   }
 
   bindEvents() {
@@ -85,11 +91,11 @@ class SalesView {
       ['all', 'Todos'],
       ...categories.map((category) => [category, category]),
     ].map(([category, label]) => `
-      <button type="button" class="category-filter${this.activeCategory === category ? ' active' : ''}" data-category="${category}" role="tab" aria-selected="${this.activeCategory === category}">${label}</button>`).join('');
+      <button type="button" class="category-filter${this.activeCategory === category ? ' active' : ''}" data-category="${escapeHtml(category)}" role="tab" aria-selected="${this.activeCategory === category}">${escapeHtml(label)}</button>`).join('');
 
     const createProductCard = (product) => `
-      <article class="product-card" data-add="${product.id}" style="--product-color: ${product.color || '#ff6600'}; cursor: pointer;">
-        <h3>${product.name}</h3>
+      <article class="product-card"${this.isShiftOpen ? ` data-add="${product.id}"` : ''} aria-disabled="${!this.isShiftOpen}" style="--product-color: ${product.color || '#ff6600'};">
+        <h3>${escapeHtml(product.name)}</h3>
         <footer>
           <small>ID ${product.id} · ${product.stock} disponibles</small>
           <strong>${this.formatMoney(product.price)}</strong>
@@ -99,10 +105,10 @@ class SalesView {
     const menu = document.getElementById('product-grid');
     if (this.activeCategory === 'all') {
       menu.classList.add('grouped-products');
-      menu.innerHTML = categories.map((category) => {
+      menu.innerHTML = categories.map((category, index) => {
         const categoryProducts = sellableProducts.filter((product) => product.category === category);
-        return `<section class="product-category" aria-labelledby="category-${category}">
-          <h3 id="category-${category}">${category}</h3>
+        return `<section class="product-category" aria-labelledby="category-${index}">
+          <h3 id="category-${index}">${escapeHtml(category)}</h3>
           <div class="product-category-grid">${categoryProducts.map(createProductCard).join('')}</div>
         </section>`;
       }).join('');
@@ -122,16 +128,16 @@ class SalesView {
       ? lines.map(({ product, qty }) => `
         <div class="cart-item">
           <div class="cart-item-row">
-            <span class="cart-item-name" title="${product.name}">${product.name}</span>
+            <span class="cart-item-name" title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</span>
             <div class="quantity">
-            <div class="quantity-stepper" aria-label="Cantidad de ${product.name}">
-              <button type="button" data-change="${product.id}" data-delta="-1" aria-label="Reducir cantidad de ${product.name}">−</button>
-              <input class="cart-quantity-input numeric-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${qty}" data-quantity="${product.id}" aria-label="Cantidad de ${product.name}">
-              <button type="button" data-change="${product.id}" data-delta="1" aria-label="Aumentar cantidad de ${product.name}">＋</button>
+            <div class="quantity-stepper" aria-label="Cantidad de ${escapeHtml(product.name)}">
+              <button type="button" data-change="${product.id}" data-delta="-1" aria-label="Reducir cantidad de ${escapeHtml(product.name)}">−</button>
+              <input class="cart-quantity-input numeric-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${qty}" data-quantity="${product.id}" aria-label="Cantidad de ${escapeHtml(product.name)}">
+              <button type="button" data-change="${product.id}" data-delta="1" aria-label="Aumentar cantidad de ${escapeHtml(product.name)}">＋</button>
             </div>
             </div>
             <b>${this.formatMoney(product.price * qty)}</b>
-            <button class="cart-item-remove" type="button" data-remove="${product.id}" aria-label="Eliminar ${product.name}">×</button>
+            <button class="cart-item-remove" type="button" data-remove="${product.id}" aria-label="Eliminar ${escapeHtml(product.name)}">×</button>
           </div>
         </div>`).join('')
       : '<p class="muted">Aún no hay productos en el pedido.</p>';
@@ -141,6 +147,13 @@ class SalesView {
 
     const amountPaid = document.getElementById('amount-paid');
     if (!this.paymentWasEdited) amountPaid.value = total.toFixed(2);
+    amountPaid.disabled = !this.isShiftOpen;
+    document.getElementById('checkout-label').textContent = this.isShiftOpen
+      ? 'Cobrar como:'
+      : 'No hay un turno abierto';
+    document.querySelectorAll('#checkout-options button').forEach((button) => {
+      button.disabled = !this.isShiftOpen || this.isCheckingOut;
+    });
     this.renderChange(total);
   }
 
@@ -188,7 +201,8 @@ class SalesView {
   changeCartQuantity(productId, delta) {
     const line = this.cart.find((item) => item.id === Number(productId));
     if (!line) return;
-    line.qty += Number(delta);
+    const product = this.getProduct(productId);
+    line.qty = Math.min(line.qty + Number(delta), product.stock);
     if (line.qty < 1) this.cart = this.cart.filter((item) => item !== line);
     this.renderOrder();
   }
@@ -216,7 +230,12 @@ class SalesView {
     this.renderOrder();
   }
 
-  checkout(tipoVenta) {
+  async checkout(tipoVenta) {
+    if (this.isCheckingOut) return;
+    if (!this.isShiftOpen) {
+      this.showToast('Debe iniciar un turno antes de registrar ventas.');
+      return;
+    }
     if (!this.cart.length) {
       this.showToast('Agregue al menos un producto al pedido.');
       return;
@@ -230,31 +249,28 @@ class SalesView {
       return;
     }
 
-    // Este objeto es el payload de la venta; incluye el tipo seleccionado al cobrar.
     const salePayload = {
-      id: Date.now(),
       tipoVenta,
-      total,
-      status: 'confirmada',
-      amountPaid,
-      change: amountPaid - total,
       lines: lines.map(({ product, qty }) => ({
         productId: product.id,
-        productName: product.name,
-        price: product.price,
         qty,
       })),
     };
 
-    this.cart.forEach((line) => {
-      const product = this.getProduct(line.id);
-      product.stock -= line.qty;
-    });
-    this.salesHistory.push(salePayload);
-    this.cart = [];
-    this.paymentWasEdited = false;
-    this.onSaleCompleted();
-    this.showToast(`Venta ${tipoVenta.toLowerCase()} cobrada y existencias actualizadas.`);
+    this.isCheckingOut = true;
+    document.querySelectorAll('#checkout-options button').forEach((button) => { button.disabled = true; });
+    try {
+      await this.onCheckout(salePayload);
+      this.cart = [];
+      this.paymentWasEdited = false;
+      this.renderOrder();
+      this.showToast(`Venta ${tipoVenta.toLowerCase()} cobrada y existencias actualizadas.`);
+    } catch (error) {
+      this.showToast(error.message);
+    } finally {
+      this.isCheckingOut = false;
+      document.querySelectorAll('#checkout-options button').forEach((button) => { button.disabled = !this.isShiftOpen; });
+    }
   }
 }
 
