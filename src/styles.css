@@ -1194,6 +1194,36 @@ dialog::backdrop {
   box-shadow: 0 12px 28px rgba(39, 118, 91, .25);
 }
 
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #fff7f0, #f5f5f5);
+}
+
+.login-screen[hidden] { display: none; }
+
+.login-card {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 18px;
+  padding: 32px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, .1);
+}
+
+.login-brand { display: grid; gap: 3px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.login-brand strong { font-size: 21px; }
+.login-brand span, .login-help { color: var(--muted); }
+.login-card h1 { font-size: 27px; }
+.login-card input, .login-card select { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 5px; background: #fff; }
+.login-submit { width: 100%; padding: 12px; }
+.login-error { margin: 0; color: var(--danger); font-weight: 700; }
+.login-help { margin: 0; font-size: 12px; }
+
 @media (max-width: 600px) {
   .product-grid {
     grid-template-columns: 1fr;

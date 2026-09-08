@@ -74,7 +74,7 @@ class SalesView {
   }
 
   renderProductMenu() {
-    // La base de datos no permite vender SKU inactivos o descontinuados.
+    // La base de datos no permite vender productos inactivos o descontinuados.
     const sellableProducts = this.products.filter((product) => !product.status || product.status === 'activo');
     const categories = [...new Set(sellableProducts.map((product) => product.category))];
     if (this.activeCategory !== 'all' && !categories.includes(this.activeCategory)) {
@@ -91,7 +91,7 @@ class SalesView {
       <article class="product-card" data-add="${product.id}" style="--product-color: ${product.color || '#ff6600'}; cursor: pointer;">
         <h3>${product.name}</h3>
         <footer>
-          <small>${product.sku} · ${product.stock} disponibles</small>
+          <small>ID ${product.id} · ${product.stock} disponibles</small>
           <strong>${this.formatMoney(product.price)}</strong>
         </footer>
       </article>`;
@@ -235,6 +235,7 @@ class SalesView {
       id: Date.now(),
       tipoVenta,
       total,
+      status: 'confirmada',
       amountPaid,
       change: amountPaid - total,
       lines: lines.map(({ product, qty }) => ({

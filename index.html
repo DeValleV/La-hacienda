@@ -9,6 +9,20 @@
   <link rel="stylesheet" href="src/sales-summary.css">
 </head>
 <body>
+  <section id="login-screen" class="login-screen" aria-labelledby="login-title">
+    <form id="login-form" class="login-card">
+      <div class="login-brand"><strong>Gestión La Hacienda</strong><span>Comedor industrial</span></div>
+      <div><p class="eyebrow">ACCESO AL SISTEMA</p><h1 id="login-title">Iniciar sesión</h1><p class="muted">Seleccione la sucursal donde trabajará durante este turno.</p></div>
+      <label for="login-branch">Sucursal<select id="login-branch" required><option value="1">Sucursal Centro</option><option value="2">Sucursal Norte</option></select></label>
+      <label for="login-username">Usuario<input id="login-username" name="username" autocomplete="username" required></label>
+      <label for="login-password">Contraseña<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
+      <p id="login-error" class="login-error" role="alert" hidden></p>
+      <button class="primary login-submit" type="submit">Entrar</button>
+      <p class="login-help">Entorno de demostración: <code>admin</code> / <code>admin123</code>.</p>
+    </form>
+  </section>
+
+  <div id="app-shell" hidden>
   <aside class="sidebar">
     <div class="brand"><strong>Gestión La Hacienda</strong><span>Comedor industrial</span></div>
     <nav>
@@ -44,7 +58,7 @@
         <div class="panel-toolbar"><h2>Productos</h2><select><option>Todas las categorías</option><option>Bebidas</option><option>Alimentos</option></select></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>PRODUCTO</th><th>CÓDIGO DEL PRODUCTO</th><th>CATEGORÍA</th><th>PRECIO</th><th>EXISTENCIAS</th><th>ESTADO</th><th></th></tr></thead>
+            <thead><tr><th>PRODUCTO</th><th>ID DEL PRODUCTO</th><th>CATEGORÍA</th><th>PRECIO</th><th>EXISTENCIAS</th><th>ESTADO</th><th></th></tr></thead>
             <tbody id="inventory-body"></tbody>
           </table>
         </div>
@@ -96,7 +110,7 @@
     <div class="title-row">
       <div>
         <h1>Historial de Ventas</h1>
-        <p class="muted">Audita transacciones pasadas, modifica cantidades o corrige el tipo de venta.</p>
+        <p class="muted">Consulta las transacciones registradas y su estado.</p>
       </div>
     </div>
     
@@ -109,7 +123,6 @@
               <th>Tipo</th>
               <th>Productos y Cantidades</th>
               <th>Total</th>
-              <th>Acciones</th>
             </tr>
           </thead>
           <tbody id="history-list">
@@ -120,6 +133,7 @@
     </div>
   </section>
 </main>
+  </div>
 
   
 
@@ -144,7 +158,6 @@
           </div>
         </div>
         <label class="full-width">Nombre base<input id="new-name" required placeholder="Ej. Agua natural"></label>
-        <label>Código SKU<input id="new-sku" required placeholder="Ej. 50012"></label>
         <div class="field-group">
           <label for="new-unit">Unidad de medida</label>
           <div class="field-with-action"><select id="new-unit" required></select><button id="add-unit" class="icon-action" type="button" aria-label="Agregar nueva unidad de medida" title="Agregar nueva unidad de medida">＋</button></div>
@@ -155,8 +168,8 @@
         </div>
         <label>Estado<select id="new-status" required></select></label>
         <label>Precio<input id="new-price" required type="number" min="0" step="0.01"></label>
-        <label>Existencias<input id="new-stock" required type="number" min="0" step="0.01"></label>
-        <label>Stock mínimo<input id="new-min-stock" required type="number" min="0" step="0.01"></label>
+        <label>Existencias<input id="new-stock" required type="number" min="0" step="1"></label>
+        <label>Stock mínimo<input id="new-min-stock" required type="number" min="0" step="1"></label>
         <div class="field-group">
           <label for="open-color-palette">Color de la tarjeta</label>
           <input id="new-color" required type="hidden" value="#ff6600">
@@ -188,6 +201,7 @@
   <script src="src/views/InventoryView.js"></script>
   <script src="src/views/SalesView.js"></script>
   <script src="src/views/ShiftSummaryView.js"></script>
+  <script src="src/views/HistoryView.js"></script>
   <script src="src/app.js"></script>
 </body>
 </html>

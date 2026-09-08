@@ -58,21 +58,22 @@ class InventoryView {
   render() {
     const inventoryBody = document.getElementById('inventory-body');
     inventoryBody.innerHTML = this.products.map((product) => {
-      const stockStatus = this.isLowStock(product) ? 'Stock bajo' : 'Disponible';
-      const statusClass = this.isLowStock(product) ? 'low' : 'ok';
+      const statusLabel = product.status === 'activo' ? 'Activo' : product.status === 'descontinuado' ? 'Descontinuado' : 'Inactivo';
+      const statusClass = product.status === 'activo' && !this.isLowStock(product) ? 'ok' : 'low';
+      const stockNote = this.isLowStock(product) ? ' · Stock bajo' : '';
 
       return `
         <tr>
           <td>${product.name}</td>
-          <td class="sku">${product.sku}</td>
+          <td class="product-id">${product.id}</td>
           <td>${product.category}</td>
           <td>${this.formatMoney(product.price)}</td>
           <td>${product.stock} unidades</td>
-          <td><span class="badge ${statusClass}">${stockStatus}</span></td>
+          <td><span class="badge ${statusClass}">${statusLabel}${stockNote}</span></td>
           <td class="product-actions">
             <button class="row-action" data-restock="${product.id}">Reponer</button>
             <button class="row-action" data-edit="${product.id}">Editar</button>
-            <button class="row-action delete-action" data-delete="${product.id}">Borrar</button>
+            ${product.status === 'activo' ? `<button class="row-action delete-action" data-delete="${product.id}">Desactivar</button>` : ''}
           </td>
         </tr>`;
     }).join('');
@@ -134,7 +135,6 @@ class InventoryView {
     document.getElementById('new-category').value = product.category;
     document.getElementById('new-brand').value = product.brand || '';
     document.getElementById('new-name').value = product.name;
-    document.getElementById('new-sku').value = product.sku;
     document.getElementById('new-unit').value = product.unit || '';
     document.getElementById('new-status').value = product.status || 'activo';
     document.getElementById('new-price').value = product.price;
@@ -149,22 +149,20 @@ class InventoryView {
   }
 
   deleteProduct(productId) {
-    const productIndex = this.products.findIndex((item) => item.id === Number(productId));
-    if (productIndex === -1) return;
+    const product = this.products.find((item) => item.id === Number(productId));
+    if (!product || product.status !== 'activo') return;
 
-    const product = this.products[productIndex];
-    if (!window.confirm(`¿Desea borrar "${product.name}" del inventario?`)) return;
+    if (!window.confirm(`¿Desea desactivar "${product.name}"? Dejará de estar disponible para nuevas ventas.`)) return;
 
-    this.products.splice(productIndex, 1);
+    product.status = 'inactivo';
     this.onProductsChanged();
-    this.showToast('Producto eliminado del inventario.');
+    this.showToast('Producto desactivado.');
   }
 
   saveProduct(event) {
     const category = document.getElementById('new-category').value;
     const brand = document.getElementById('new-brand').value;
     const name = document.getElementById('new-name').value;
-    const sku = document.getElementById('new-sku').value;
     const unit = document.getElementById('new-unit').value;
     const status = document.getElementById('new-status').value;
     const price = Number(document.getElementById('new-price').value);
@@ -173,16 +171,9 @@ class InventoryView {
     const color = document.getElementById('new-color').value;
 
     // Evita cerrar el diálogo cuando los datos ingresados no son válidos.
-    if (!category || !brand || !name || !sku || !unit || !status || [price, stock, minStock].some((value) => !Number.isFinite(value) || value < 0)) {
+    if (!category || !brand || !name || !unit || !status || !Number.isFinite(price) || price < 0 || !Number.isInteger(stock) || stock < 0 || !Number.isInteger(minStock) || minStock < 0) {
       event.preventDefault();
       this.showToast('Complete todos los campos del producto.');
-      return;
-    }
-
-    const repeatedSku = this.products.find((product) => product.sku === sku && product.id !== this.editingProductId);
-    if (repeatedSku) {
-      event.preventDefault();
-      this.showToast('El código SKU ya está registrado.');
       return;
     }
 
@@ -191,7 +182,6 @@ class InventoryView {
       editingProduct.category = category;
       editingProduct.brand = brand;
       editingProduct.name = name;
-      editingProduct.sku = sku;
       editingProduct.unit = unit;
       editingProduct.status = status;
       editingProduct.price = price;
@@ -200,7 +190,7 @@ class InventoryView {
       editingProduct.color = color;
     } else {
       this.products.push({
-        id: Date.now(), category, brand, name, sku, unit, status, price, stock, minStock, color,
+        id: Date.now(), category, brand, name, unit, status, price, stock, minStock, color,
       });
     }
 

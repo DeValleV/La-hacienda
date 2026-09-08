@@ -5,81 +5,43 @@ class HistoryView {
     this.formatMoney = formatMoney;
     this.showToast = showToast;
     this.onHistoryChanged = onHistoryChanged;
-    this.bindEvents();
-  }
-
-  bindEvents() {
-    const table = document.getElementById('history-table');
-    
-    // Delegación de eventos para clics (Eliminar venta o producto)
-    table.addEventListener('click', (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      
-      const saleId = Number(btn.dataset.sale);
-      if (btn.dataset.action === 'delete-sale') this.deleteSale(saleId);
-      if (btn.dataset.action === 'remove-product') this.removeProduct(saleId, Number(btn.dataset.product));
-    });
-
-    // Delegación de eventos para cambios (Select de tipo o Input de cantidad)
-    table.addEventListener('change', (e) => {
-      const el = e.target;
-      const saleId = Number(el.dataset.sale);
-      
-      if (el.dataset.action === 'change-type') {
-        this.changeSaleType(saleId, el.value);
-      }
-      if (el.dataset.action === 'change-qty') {
-        this.changeQuantity(saleId, Number(el.dataset.product), Number(el.value));
-      }
-    });
   }
 
   render() {
     const tbody = document.getElementById('history-list');
     
     if (this.salesHistory.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;">No hay ventas registradas.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center;">No hay ventas registradas.</td></tr>';
       return;
     }
 
     // Renderizamos cada venta y sus productos anidados
     tbody.innerHTML = this.salesHistory.map(sale => `
       <tr>
-        <td><strong>#${sale.id}</strong></td>
-        <td>
-          <select data-action="change-type" data-sale="${sale.id}">
-            <option value="COMEDOR" ${sale.tipoVenta === 'COMEDOR' ? 'selected' : ''}>Comedor</option>
-            <option value="FACTURADA" ${sale.tipoVenta === 'FACTURADA' ? 'selected' : ''}>Facturada</option>
-            <option value="PERSONAL" ${sale.tipoVenta === 'PERSONAL' ? 'selected' : ''}>Personal</option>
-          </select>
-        </td>
+        <td><strong>#${sale.id}</strong>${sale.status === 'anulada' ? '<br><span class="badge low">Anulada</span>' : ''}</td>
+        <td>${this.getSaleTypeLabel(sale.tipoVenta)}</td>
         <td>
           <div style="display: grid; gap: 8px;">
             ${sale.lines.map(line => `
               <div style="display: flex; gap: 10px; align-items: center;">
-                <button class="add" style="width:20px; height:20px; font-size:12px; background:var(--danger);" 
-                        data-action="remove-product" data-sale="${sale.id}" data-product="${line.productId}">×</button>
                 <span>${line.productName}</span>
-                <input type="number" min="1" style="width: 60px; padding: 2px 5px;" 
-                       value="${line.qty}" data-action="change-qty" data-sale="${sale.id}" data-product="${line.productId}">
+                <span class="muted">× ${line.qty}</span>
               </div>
             `).join('')}
           </div>
         </td>
         <td><strong>${this.formatMoney(sale.total)}</strong></td>
-        <td>
-          <button class="primary" style="background:var(--danger);" data-action="delete-sale" data-sale="${sale.id}">
-            Anular Venta
-          </button>
-        </td>
       </tr>
     `).join('');
   }
 
+  getSaleTypeLabel(type) {
+    return { COMEDOR: 'Comedor', FACTURADA: 'Facturada', PERSONAL: 'Personal' }[type] || type;
+  }
+
   changeSaleType(saleId, newType) {
     const sale = this.salesHistory.find(s => s.id === saleId);
-    if (sale) {
+    if (sale && sale.status !== 'anulada') {
       sale.tipoVenta = newType;
       this.showToast(`Venta #${saleId} reclasificada a ${newType}.`);
       this.onHistoryChanged();
@@ -88,6 +50,7 @@ class HistoryView {
 
   changeQuantity(saleId, productId, newQty) {
     const sale = this.salesHistory.find(s => s.id === saleId);
+    if (!sale || sale.status === 'anulada') return;
     const line = sale.lines.find(l => l.productId === productId);
     const product = this.products.find(p => p.id === productId);
 
@@ -111,6 +74,7 @@ class HistoryView {
 
   removeProduct(saleId, productId) {
     const sale = this.salesHistory.find(s => s.id === saleId);
+    if (!sale || sale.status === 'anulada') return;
     const lineIndex = sale.lines.findIndex(l => l.productId === productId);
     const product = this.products.find(p => p.id === productId);
 
@@ -128,8 +92,8 @@ class HistoryView {
   }
 
   deleteSale(saleId) {
-    const saleIndex = this.salesHistory.findIndex(s => s.id === saleId);
-    const sale = this.salesHistory[saleIndex];
+    const sale = this.salesHistory.find(s => s.id === saleId);
+    if (!sale || sale.status === 'anulada') return;
 
     // Restaurar el stock de todos los productos de esta venta
     sale.lines.forEach(line => {
@@ -137,7 +101,7 @@ class HistoryView {
       if (product) product.stock += line.qty;
     });
 
-    this.salesHistory.splice(saleIndex, 1);
+    sale.status = 'anulada';
     this.showToast(`Venta #${saleId} anulada y stock devuelto.`);
     this.onHistoryChanged();
   }
@@ -148,3 +112,5 @@ class HistoryView {
     this.onHistoryChanged();
   }
 }
+
+window.HistoryView = HistoryView;
