@@ -57,43 +57,90 @@ Las reglas del modelo están explicadas en [database-schema.md](database-schema.
 
 La migración ya contiene dos sucursales semilla: `Sucursal Centro` y `Sucursal Norte`; no contiene usuarios ni contraseñas. También añade cinco productos de ejemplo repartidos entre ambas sucursales. En producción se pueden editar o desactivar desde Inventario; no se deben borrar físicamente.
 
-## 3. Antes de tocar Cloudflare
+## 3. Requisitos compartidos
 
-1. Crear una cuenta Cloudflare y activar MFA/2FA para quien vaya a administrar producción.
-2. Instalar Node.js LTS actual y Git en el equipo de despliegue.
-3. Obtener una copia limpia del repositorio y revisar que no contenga `.dev.vars`, `.env`, IDs D1 reales ni contraseñas.
-4. En la raíz del proyecto ejecutar:
+Instala Node.js LTS actual, Git y [pnpm](https://pnpm.io/installation) en el equipo que se usará. Todas las instrucciones siguientes se ejecutan desde la raíz del repositorio.
+
+```bash
+pnpm install
+pnpm test
+```
+
+La primera instalación genera `pnpm-lock.yaml`; debe conservarse y versionarse junto con el código. Las dos pruebas deben terminar correctamente antes de continuar.
+
+## 4. Flujo completo: ejecutar sólo en local
+
+Este flujo no requiere cuenta Cloudflare ni crea recursos remotos. Sirve para desarrollar, hacer demostraciones y validar cambios de manera aislada.
+
+```text
+instalar dependencias → crear secreto local → migrar D1 local
+→ arrancar Worker local → crear administrador local → usar la interfaz
+```
+
+### Paso 1: instalar y preparar el secreto local
+
+```bash
+pnpm install
+cp .dev.vars.example .dev.vars
+```
+
+Abre `.dev.vars` y cambia el valor de `BOOTSTRAP_TOKEN` por una cadena aleatoria larga. Este archivo sólo existe en la máquina local y está ignorado por Git.
+
+### Paso 2: crear la base local y arrancar la aplicación
+
+```bash
+pnpm run db:migrate:local
+pnpm run dev
+```
+
+Wrangler crea una D1 local, aplica `migrations/0001_initial.sql` y muestra una URL, normalmente `http://localhost:8787`. Mantén ese proceso abierto y usa esa URL en el navegador.
+
+### Paso 3: crear administradores locales
+
+La base local empieza sin usuarios. Desde otra terminal, crea un administrador para cada sucursal semilla. Sustituye los valores entre `<...>`; conserva la URL local tal como la imprimió Wrangler.
+
+```bash
+curl --fail-with-body -X POST "http://localhost:8787/api/setup/admin" \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Token: <TOKEN-DE-.dev.vars>" \
+  --data '{"branchId":1,"name":"Administración Centro","username":"admin.centro","password":"<CONTRASEÑA-LARGA>"}'
+```
+
+Repite para `branchId: 2` si quieres probar Sucursal Norte. Inicia sesión desde la interfaz y crea los demás usuarios, productos o turnos de prueba.
+
+### Paso 4: validar y reiniciar si hace falta
+
+- Ejecuta `pnpm test` para validar migración y contrato de la interfaz.
+- Usa `Ctrl+C` en la terminal de `pnpm run dev` para detener el Worker.
+- La D1 local vive bajo `.wrangler/`. Se puede borrar para reiniciar todos los datos locales, pero nunca se debe aplicar esa acción a una D1 remota.
+
+El flujo local termina aquí: no hay dominio, cuenta Cloudflare, Worker publicado ni datos compartidos con otra persona.
+
+## 5. Flujo completo: publicar en Cloudflare
+
+Este flujo crea y modifica recursos remotos. Debe hacerlo sólo quien sea dueño de la cuenta Cloudflare del proyecto. Parte de un repositorio que ya pasó el flujo local.
+
+```text
+crear cuenta y autenticar Wrangler → crear D1 de staging y producción
+→ configurar IDs → migrar staging → secreto → desplegar staging
+→ crear administradores y validar → migrar y desplegar producción
+```
+
+### Paso 1: preparar la cuenta y la terminal
+
+1. Crear una cuenta Cloudflare y activar MFA/2FA para quienes administrarán producción.
+2. Verificar que el repositorio no contenga `.dev.vars`, `.env`, contraseñas, tokens ni IDs D1 reales.
+3. Instalar dependencias, ejecutar pruebas e iniciar sesión con Cloudflare:
 
    ```bash
-   npm install
-   npm test
-   npx wrangler login
+   pnpm install
+   pnpm test
+   pnpm exec wrangler login
    ```
 
-   `wrangler login` abre el flujo de autenticación del navegador para vincular la terminal con la cuenta Cloudflare. `npm test` debe terminar con dos pruebas exitosas antes de publicar.
+   El último comando abre el navegador para autorizar la terminal.
 
-## 4. Probar localmente primero
-
-1. Crear el archivo local de secretos a partir del ejemplo:
-
-   ```bash
-   cp .dev.vars.example .dev.vars
-   ```
-
-2. Abrir `.dev.vars` y reemplazar el valor de ejemplo de `BOOTSTRAP_TOKEN` por una cadena aleatoria larga, guardada también en un gestor de contraseñas.
-3. Aplicar la base local y arrancar el Worker:
-
-   ```bash
-   npm run db:migrate:local
-   npm run dev
-   ```
-
-4. Abrir la URL que imprima Wrangler, normalmente `http://localhost:8787`.
-5. Crear el primer administrador local usando el endpoint de inicialización descrito en la sección 7. Para local, la URL será la de Wrangler.
-
-La base D1 local vive en `.wrangler/`; se puede borrar para reiniciar datos de prueba. No hagas esto con una base remota.
-
-## 5. Crear los recursos remotos
+### Paso 2: crear las dos bases D1
 
 Se usan dos entornos separados. Nunca apuntes staging a la base de producción.
 
@@ -102,14 +149,12 @@ Se usan dos entornos separados. Nunca apuntes staging a la base de producción.
 | Staging | `la-hacienda-staging` | `la-hacienda-staging` | Pruebas antes de publicar. |
 | Producción | `la-hacienda` | `la-hacienda` | Operación real. |
 
-Desde la raíz del proyecto, crea primero las dos bases:
-
 ```bash
-npx wrangler d1 create la-hacienda-staging
-npx wrangler d1 create la-hacienda
+pnpm exec wrangler d1 create la-hacienda-staging
+pnpm exec wrangler d1 create la-hacienda
 ```
 
-Cada comando imprime un bloque con `database_name` y `database_id`. Si Wrangler ofrece modificar el archivo automáticamente, elige **No**: este proyecto ya tiene dos bloques D1 y conviene actualizarlo manualmente.
+Cada comando imprime `database_name` y `database_id`. Si ofrece modificar el archivo automáticamente, elige **No**: el proyecto ya define ambos entornos.
 
 Edita [wrangler.toml](../wrangler.toml):
 
@@ -120,66 +165,40 @@ Edita [wrangler.toml](../wrangler.toml):
 
 No cambies el binding `DB`: el código lo usa como `env.DB`.
 
-## 6. Aplicar migraciones de forma segura
+### Paso 3: migrar y desplegar staging
 
-Primero aplica y revisa staging:
-
-```bash
-npm run db:migrate:staging
-```
-
-Confirma que sólo se aplique `0001_initial.sql`. Después consulta las sucursales semilla:
+Aplica la migración sólo a staging:
 
 ```bash
-npx wrangler d1 execute la-hacienda-staging --remote --command "SELECT id, nombre, codigo, activa FROM sucursal;"
+pnpm run db:migrate:staging
+pnpm exec wrangler d1 execute la-hacienda-staging --remote --command "SELECT id, nombre, codigo, activa FROM sucursal;"
 ```
 
-Debe devolver las dos sucursales. Conserva sus IDs para crear los administradores iniciales. En una instalación limpia serán normalmente `1` y `2`, pero usa siempre el resultado de la consulta, no una suposición.
+La consulta debe mostrar las dos sucursales semilla. Anota sus IDs; en una base limpia serán normalmente `1` y `2`, pero usa siempre el resultado real.
 
-Cuando staging esté validado, la misma migración se aplicará a producción con:
+Genera un `BOOTSTRAP_TOKEN` aleatorio y guárdalo temporalmente como secreto de staging:
 
 ```bash
-npm run db:migrate:production
+pnpm exec wrangler secret put BOOTSTRAP_TOKEN --env staging
+pnpm run deploy:staging
 ```
 
-No edites una migración que ya haya llegado a un entorno remoto. Para cambios futuros se crea otra migración numerada, se prueba localmente, se aplica a staging y sólo después a producción.
+`secret put` publica una versión del Worker, por lo que la migración debe ir antes. El despliegue posterior confirma que assets, código y binding D1 son los correctos.
 
-## 7. Configurar el secreto y crear administradores iniciales
+### Paso 4: crear administradores y validar staging
 
-`BOOTSTRAP_TOKEN` es un secreto temporal que habilita `POST /api/setup/admin`. Sirve para crear el primer administrador cuando no existe ningún usuario. No es una contraseña de uso diario ni debe aparecer en un commit, captura o chat.
+Copia la URL `workers.dev` que imprima el despliegue. Si Cloudflare pide elegir un subdominio `workers.dev`, usa uno estable. Por cada sucursal, ejecuta desde una terminal confiable:
 
-1. Genera una cadena aleatoria larga en un gestor de contraseñas.
-2. Guarda el secreto de staging. El comando pedirá el valor de forma interactiva:
+```bash
+curl --fail-with-body -X POST "<URL-COMPLETA-DE-STAGING>/api/setup/admin" \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Token: <BOOTSTRAP_TOKEN-DE-STAGING>" \
+  --data '{"branchId":1,"name":"Administración Centro","username":"admin.centro","password":"<CONTRASEÑA-LARGA>"}'
+```
 
-   ```bash
-   npx wrangler secret put BOOTSTRAP_TOKEN --env staging
-   ```
+Repite con el ID de cada sucursal y credenciales distintas. Después inicia sesión y completa la validación de staging.
 
-   Cloudflare publica una versión del Worker al guardar un secreto; por eso se aplicó la migración antes.
-
-3. Despliega staging:
-
-   ```bash
-   npm run deploy:staging
-   ```
-
-4. Copia la URL `workers.dev` que muestre el despliegue. Si la cuenta pide elegir un subdominio `workers.dev`, elige uno estable y anótalo. Con la URL completa, crea un administrador por cada sucursal desde una terminal confiable:
-
-   ```bash
-   curl --fail-with-body -X POST "<URL-COMPLETA-DE-STAGING>/api/setup/admin" \
-     -H "Content-Type: application/json" \
-     -H "X-Bootstrap-Token: <BOOTSTRAP_TOKEN>" \
-     --data '{"branchId":1,"name":"Administración Centro","username":"admin.centro","password":"cambiar-por-una-clave-larga"}'
-   ```
-
-   Repite la operación con el ID de cada sucursal y credenciales distintas. La contraseña debe tener entre 10 y 200 caracteres. No uses la contraseña del ejemplo.
-
-5. Inicia sesión desde la interfaz para comprobar cada administrador. Desde Configuración podrás crear cajeros y encargados para la misma sucursal.
-6. Una vez creados los administradores necesarios, elimina `BOOTSTRAP_TOKEN` desde **Workers & Pages → Worker → Settings → Variables and Secrets**. Mientras no exista, el endpoint devolverá error y no podrá crear administradores adicionales.
-
-Si se abre una sucursal después de retirar el secreto, habrá que reintroducir temporalmente un `BOOTSTRAP_TOKEN`, crear su administrador inicial y eliminarlo otra vez. Esto es una limitación conocida del modelo actual de administración por sucursal.
-
-## 8. Validación de staging
+## 6. Checklist de validación de staging
 
 Antes de producción, realiza esta lista con cuentas reales de prueba:
 
@@ -195,39 +214,39 @@ Antes de producción, realiza esta lista con cuentas reales de prueba:
 
 Revisa errores en **Workers & Pages → Worker → Observability/Logs**. El proyecto habilita observabilidad en `wrangler.toml`.
 
-## 9. Pasar a producción
+## 7. Completar el flujo remoto: producción
 
-Sólo después de completar la lista de staging:
+Sólo después de completar staging:
 
-1. Confirma que `wrangler.toml` tiene el ID de producción correcto.
-2. Aplica la migración de producción si no se hizo en la sección 6:
-
-   ```bash
-   npm run db:migrate:production
-   ```
-
-3. Define un token de inicialización nuevo, distinto al de staging:
+1. Confirma una última vez que el ID de producción en `wrangler.toml` pertenece a `la-hacienda`, no a staging.
+2. Aplica la migración a producción:
 
    ```bash
-   npx wrangler secret put BOOTSTRAP_TOKEN
+   pnpm run db:migrate:production
    ```
 
-4. Despliega:
+3. Define un `BOOTSTRAP_TOKEN` nuevo, distinto al de staging, y publica producción:
 
    ```bash
-   npm run deploy
+   pnpm exec wrangler secret put BOOTSTRAP_TOKEN
+   pnpm run deploy
    ```
 
-5. Crea el administrador de cada sucursal con la URL de producción, verifica login y elimina el secreto como en la sección 7.
+4. Crea un administrador inicial para cada sucursal con la URL de producción, exactamente como en el paso 4 del flujo remoto pero usando credenciales y token de producción.
+5. Verifica login en producción y elimina `BOOTSTRAP_TOKEN` desde **Workers & Pages → Worker → Settings → Variables and Secrets**. Mientras no exista, el endpoint de inicialización no puede crear administradores.
 6. Conserva la URL `workers.dev` como acceso inicial; no hace falta comprar o migrar un dominio para que el sistema funcione.
 
-## 10. Dominio propio opcional
+Si se abre una sucursal después de retirar el secreto, habrá que reintroducir temporalmente un `BOOTSTRAP_TOKEN`, crear su administrador inicial y eliminarlo otra vez. Esto es una limitación conocida del modelo actual de administración por sucursal.
+
+No edites una migración que ya haya llegado a un entorno remoto. Para cambios futuros se crea otra migración numerada, se prueba localmente, se aplica a staging, se valida y sólo después llega a producción.
+
+## 8. Dominio propio opcional
 
 Cuando ya exista un dominio activo en Cloudflare, añade un subdominio como `comedor.tudominio.mx` desde **Workers & Pages → seleccionar Worker → Settings → Domains & Routes → Add → Custom Domain**. Un Custom Domain es la opción apropiada porque este Worker es el origen completo de la aplicación: Cloudflare crea el DNS y certificado necesarios.
 
 No uses una Route para este caso salvo que el hostname ya tenga un servidor de origen que deba mantenerse.
 
-## 11. Operación diaria y cambios futuros
+## 9. Operación diaria y cambios futuros
 
 - Las personas usan la interfaz; no deben ejecutar SQL directamente sobre producción.
 - Exporta periódicamente los CSV de ventas y guárdalos fuera del equipo de caja.
@@ -236,7 +255,7 @@ No uses una Route para este caso salvo que el hostname ya tenga un servidor de o
 - Revisa Logs tras cada despliegue y nunca incluyas contraseñas, tokens ni información sensible en `console.log`.
 - Si se detecta un incidente, revoca sesiones desactivando al usuario afectado o cambiando su contraseña desde Configuración; después revisa el historial y los logs.
 
-## 12. Problemas comunes
+## 10. Problemas comunes
 
 | Síntoma | Causa probable | Acción |
 | --- | --- | --- |

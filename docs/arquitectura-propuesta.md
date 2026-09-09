@@ -119,7 +119,7 @@ Las migraciones SQL se almacenan en `migrations/` y se aplican en orden a cada b
 
 ## Verificación local
 
-Después de instalar dependencias con `npm install`, `npm run dev` inicia Worker, assets y D1 local. `npm test` valida la migración y el contrato básico entre el HTML y las vistas. `npm run serve:static` sirve únicamente la maqueta y no puede completar login ni operaciones de API.
+Después de instalar dependencias con `pnpm install`, `pnpm run dev` inicia Worker, assets y D1 local. `pnpm test` valida la migración y el contrato básico entre el HTML y las vistas. `pnpm run serve:static` sirve únicamente la maqueta y no puede completar login ni operaciones de API. La guía separa el flujo completo local del remoto en [guia-despliegue-cloudflare.md](guia-despliegue-cloudflare.md).
 
 ## Operación y continuidad
 

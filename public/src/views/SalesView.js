@@ -157,8 +157,17 @@ class SalesView {
     this.renderChange(total);
   }
 
+  toCents(value) {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? Math.round((amount + Number.EPSILON) * 100) : Number.NaN;
+  }
+
+  getTotalCents(lines = this.getCartLines()) {
+    return lines.reduce((sum, line) => sum + this.toCents(line.product.price) * line.qty, 0);
+  }
+
   getTotal(lines = this.getCartLines()) {
-    return lines.reduce((sum, line) => sum + line.product.price * line.qty, 0);
+    return this.getTotalCents(lines) / 100;
   }
 
   getAmountPaid() {
@@ -179,9 +188,10 @@ class SalesView {
   }
 
   renderChange(total = this.getTotal()) {
-    const amountPaid = this.getAmountPaid();
-    const change = Number.isFinite(amountPaid) ? Math.max(0, amountPaid - total) : 0;
-    document.getElementById('change-amount').textContent = this.formatMoney(change);
+    const amountPaidCents = this.toCents(this.getAmountPaid());
+    const totalCents = this.toCents(total);
+    const changeCents = Number.isFinite(amountPaidCents) ? Math.max(0, amountPaidCents - totalCents) : 0;
+    document.getElementById('change-amount').textContent = this.formatMoney(changeCents / 100);
   }
 
   addToCart(productId) {
@@ -242,9 +252,9 @@ class SalesView {
     }
 
     const lines = this.getCartLines();
-    const total = this.getTotal(lines);
-    const amountPaid = this.getAmountPaid();
-    if (!Number.isFinite(amountPaid) || amountPaid < total) {
+    const totalCents = this.getTotalCents(lines);
+    const amountPaidCents = this.toCents(this.getAmountPaid());
+    if (!Number.isFinite(amountPaidCents) || amountPaidCents < totalCents) {
       this.showToast('La cantidad pagada debe cubrir el total de la venta.');
       return;
     }
