@@ -24,10 +24,10 @@ Workers puede desplegar el código y los archivos estáticos como una sola unida
 ## Límites del modelo
 
 - Cada `producto` pertenece a una única `sucursal`; incluye su propio stock y stock mínimo.
-- Categorías, marcas y unidades son catálogos compartidos; la independencia operativa se aplica al producto, su precio y sus existencias.
+- Categorías y marcas son catálogos compartidos; la independencia operativa se aplica al producto, su precio y sus existencias.
 - Cada `usuario` está asignado a una sucursal. Al iniciar sesión, la sucursal seleccionada debe coincidir con la del usuario.
 - Una venta, su usuario y todos sus productos deben ser de la misma sucursal.
-- Cada venta pertenece al turno abierto de su sucursal; sólo puede haber un turno abierto por sucursal.
+- El turno es global para la sucursal: todos los usuarios conectados a esa sucursal registran ventas en el mismo turno abierto. Sólo puede haber un turno abierto por sucursal.
 - El historial se forma con `venta` y `detalle_venta`; no habrá tabla de movimientos de inventario en esta versión.
 - El producto se identifica por `producto.id`; no se utiliza SKU.
 
@@ -65,17 +65,20 @@ La interfaz ya no contiene credenciales de demostración. El primer administrado
 | `GET /api/me` | Autenticado | Devuelve usuario, rol y sucursal activa. |
 | `GET /api/products` | Cajero, encargado, administrador | Lista productos de la sucursal de la sesión. |
 | `POST /api/sales` | Cajero, encargado, administrador | Crea venta, detalles y descuenta stock en una transacción. |
-| `GET /api/sales` | Cajero, encargado, administrador | Historial de sólo lectura; el cajero ve únicamente sus ventas y los demás roles ven su sucursal. |
+| `GET /api/sales?date=AAAA-MM-DD` | Cajero, encargado, administrador | Historial de sólo lectura de un día; incluye todos los turnos visibles de la sucursal. El cajero ve únicamente sus ventas y los demás roles ven su sucursal. |
+| `GET /api/sales/months` y `GET /api/sales/days?month=AAAA-MM` | Cajero, encargado, administrador | Devuelven los meses y días con ventas visibles para el calendario; los días sin ventas no se pueden seleccionar. |
 | `GET /api/shifts/current` | Autenticado | Consulta el turno abierto de la sucursal. |
 | `POST /api/shifts/open` | Encargado, administrador | Abre el turno de la sucursal. |
 | `POST /api/shifts/current/close` | Encargado, administrador | Cierra el turno abierto. |
 | `POST/PATCH /api/products` | Encargado, administrador | Crea y modifica productos de la sucursal. |
 | `POST /api/products/:id/restock` | Encargado, administrador | Aumenta existencias de un producto de la sucursal. |
+| `POST /api/products/restock-batch` | Encargado, administrador | Aumenta existencias de varios productos de la sucursal en una sola operación. |
 | `POST /api/products/:id/deactivate` | Encargado, administrador | Cambia el estado; nunca borra un producto usado. |
+| `POST /api/products/:id/activate` | Encargado, administrador | Reactiva un producto desactivado para volver a venderlo. |
 | `GET/POST/PATCH /api/users` | Administrador | Administra usuarios de su sucursal. |
 | `GET/POST/PATCH /api/branches` | Administrador | Administra sucursales. |
 | `GET /api/catalogs` | Autenticado | Consulta catálogos requeridos por la interfaz. |
-| `POST/PATCH /api/catalogs/{categories,brands,units}` | Encargado, administrador | Administra únicamente catálogos editables; roles, estados y tipos de venta son internos. |
+| `POST/PATCH /api/catalogs/{categories,brands}` | Encargado, administrador | Administra únicamente catálogos editables; roles, estados y tipos de venta son internos. |
 
 `POST /api/sales` será transaccional: valida sesión, turno abierto, sucursal, estado de producto y stock; crea `venta` y `detalle_venta`; actualiza el stock; calcula y persiste el total exacto en centavos. Ningún total, precio o id enviado por el navegador será confiable sin comprobarse.
 
@@ -89,8 +92,7 @@ public/                  interfaz estática publicada por el Worker
   src/views/             inventario, venta, turno, historial y configuración
 src/worker.js            API, autorización y reglas de negocio
 src/auth.js              contraseñas, tokens y cookies de sesión
-migrations/0001_initial.sql
-                         esquema, índices, restricciones, triggers y semillas
+migrations/                 esquema, índices, restricciones, triggers, semillas y cambios versionados
 wrangler.toml            Worker, assets y bindings de producción/staging
 server.js                servidor estático local; no sustituye la API
 ```
@@ -100,11 +102,11 @@ server.js                servidor estático local; no sustituye la API
 ## Estado funcional de la interfaz
 
 - Login real por sucursal, usuario y contraseña; la pantalla se oculta al autenticar.
-- Inventario filtrable por nombre, ID y categoría, con alta, edición, reposición, desactivación lógica y exportación CSV.
+- Inventario filtrable por nombre, ID, categoría y estado (activos, desactivados o todos), con alta, edición, reposición individual o masiva, desactivación lógica y exportación en Excel (`.xlsx`). El nivel de stock sustituye la columna de estado.
 - Punto de venta bloqueado si no existe un turno abierto. `Pagado` y `Cambio` se calculan sólo en el navegador y no se persisten.
-- Apertura/cierre de turno y reporte exportable del turno actual o recién cerrado.
-- Historial de ventas de sólo lectura, con turno, fecha, usuario y datos históricos del detalle.
-- Configuración de usuarios de la sucursal, sucursales y los catálogos editables de categoría, marca y unidad.
+- Apertura/cierre de turno y reporte exportable en Excel del turno actual o recién cerrado.
+- Historial de ventas de sólo lectura por día: calendario que sólo habilita días con ventas, resumen diario y grupos colapsables por turno.
+- Configuración de usuarios de la sucursal, sucursales y los catálogos editables de categoría y marca.
 - Navegación y acciones administrativas ocultas de acuerdo con el rol; el Worker vuelve a validar todos los permisos.
 
 ## Entornos y datos
@@ -125,7 +127,7 @@ Después de instalar dependencias con `pnpm install`, `pnpm run dev` inicia Work
 
 - Dominio propio con HTTPS administrado por Cloudflare.
 - Registros de Worker habilitados y revisión de errores después de cada despliegue. [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
-- Exportación periódica de ventas a CSV, guardada fuera de la máquina de operación.
+- Exportación periódica de ventas a Excel (`.xlsx`), guardada fuera de la máquina de operación.
 - Antes de cambios de esquema, verificar recuperación de D1 mediante Time Travel o respaldo disponible en la cuenta.
 - Sin operación sin conexión en la primera versión; una venta sólo se confirma tras respuesta exitosa de la API.
 

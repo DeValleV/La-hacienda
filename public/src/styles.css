@@ -926,6 +926,199 @@ label input {
   transform: none;
 }
 
+/* Cierre y desplazamiento consistente de los diálogos. */
+dialog {
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+
+.dialog-head button {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  line-height: 1;
+  border-radius: 5px;
+}
+
+.dialog-head button:hover {
+  background: var(--soft);
+}
+
+.bulk-restock-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+
+.bulk-restock-table-wrap {
+  max-height: min(46dvh, 420px);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.bulk-restock-table-wrap th,
+.bulk-restock-table-wrap td {
+  padding: 11px 14px;
+}
+
+.bulk-restock-table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.bulk-restock-input {
+  width: 106px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+.inventory-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.history-date-picker {
+  min-width: 225px;
+}
+
+.history-day-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.history-shifts {
+  display: grid;
+  gap: 14px;
+}
+
+.history-empty {
+  padding: 22px;
+}
+
+.history-shift {
+  overflow: hidden;
+}
+
+.history-shift summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 17px 20px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.history-shift summary::-webkit-details-marker {
+  display: none;
+}
+
+.history-shift summary::after {
+  content: '⌄';
+  color: var(--blue);
+  font-size: 20px;
+}
+
+.history-shift:not([open]) summary::after {
+  transform: rotate(-90deg);
+}
+
+.history-shift summary > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.shift-quick-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--muted);
+}
+
+.shift-quick-stats strong {
+  color: #263033;
+}
+
+.sale-type {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sale-type-comedor { background: #e8f5ed; color: #27765b; }
+.sale-type-personal { background: #efe9fb; color: #6c4ba3; }
+.sale-type-facturada { background: #fff0e8; color: #b94a20; }
+
+.history-calendar-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.history-calendar {
+  display: grid;
+  gap: 15px;
+  padding: 24px;
+}
+
+.calendar-navigation {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  gap: 10px;
+  align-items: center;
+  text-align: center;
+}
+
+.calendar-navigation .secondary {
+  padding: 8px;
+  font-size: 23px;
+}
+
+.calendar-weekdays,
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.calendar-weekdays {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+.calendar-day:not(:disabled):hover,
+.calendar-day.selected {
+  background: var(--blue);
+  color: #fff;
+}
+
+.calendar-day:disabled {
+  color: #c5beb7;
+  cursor: not-allowed;
+}
+
+.calendar-day.empty {
+  display: block;
+}
+
+.history-lines {
+  display: grid;
+  gap: 8px;
+}
+
+.history-lines div {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 /* =========================================
    12. MEDIA QUERIES (RESPONSIVE)
    ========================================= */

@@ -12,27 +12,28 @@ const PRODUCT_CARD_COLORS = [
 
 /** Gestiona la tabla y el diálogo de la ventana de Inventario. */
 class InventoryView {
-  constructor({ products, formatMoney, showToast, onSaveProduct, onRestockProduct, onDeactivateProduct }) {
+  constructor({ products, formatMoney, showToast, onSaveProduct, onRestockProduct, onBulkRestock, onDeactivateProduct, onActivateProduct }) {
     this.products = products;
     this.formatMoney = formatMoney;
     this.showToast = showToast;
     this.onSaveProduct = onSaveProduct;
     this.onRestockProduct = onRestockProduct;
+    this.onBulkRestock = onBulkRestock;
     this.onDeactivateProduct = onDeactivateProduct;
+    this.onActivateProduct = onActivateProduct;
     this.editingProductId = null;
     this.restockingProductId = null;
     this.extraCategories = [];
     this.extraBrands = [];
-    this.extraUnits = [];
     this.searchTerm = '';
     this.activeCategory = 'all';
+    this.statusFilter = 'activo';
     this.bindEvents();
   }
 
   setCatalogs(catalogs) {
     this.extraCategories = (catalogs.categories || []).map((item) => item.name);
     this.extraBrands = (catalogs.brands || []).map((item) => item.name);
-    this.extraUnits = (catalogs.units || []).map((item) => item.name);
   }
 
   bindEvents() {
@@ -43,17 +44,19 @@ class InventoryView {
       if (button.dataset.restock) this.openRestockDialog(button.dataset.restock);
       if (button.dataset.edit) this.openEditDialog(button.dataset.edit);
       if (button.dataset.delete) this.deleteProduct(button.dataset.delete);
+      if (button.dataset.activate) this.activateProduct(button.dataset.activate);
     });
 
     document.getElementById('add-product').onclick = () => this.openNewProductDialog();
+    document.getElementById('bulk-restock').onclick = () => this.openBulkRestockDialog();
     document.getElementById('save-product').onclick = (event) => this.saveProduct(event);
     document.getElementById('save-restock').onclick = (event) => this.saveRestock(event);
+    document.getElementById('bulk-restock-form').addEventListener('submit', (event) => this.saveBulkRestock(event));
+    document.getElementById('bulk-restock-list').addEventListener('input', () => this.updateBulkRestockSummary());
     document.getElementById('add-category').onclick = () => this.toggleNewCategoryField();
     document.getElementById('confirm-category').onclick = () => this.addCategory();
     document.getElementById('add-brand').onclick = () => this.toggleNewCatalogField('brand');
     document.getElementById('confirm-brand').onclick = () => this.addCatalogOption('brand');
-    document.getElementById('add-unit').onclick = () => this.toggleNewCatalogField('unit');
-    document.getElementById('confirm-unit').onclick = () => this.addCatalogOption('unit');
     document.getElementById('open-color-palette').onclick = () => this.openColorPalette();
     document.getElementById('color-options').addEventListener('click', (event) => {
       const colorOption = event.target.closest('[data-color]');
@@ -67,10 +70,20 @@ class InventoryView {
       this.activeCategory = event.target.value;
       this.render();
     });
+    document.getElementById('inventory-status').addEventListener('change', (event) => {
+      this.statusFilter = event.target.value;
+      this.render();
+    });
   }
 
   isLowStock(product) {
     return product.stock <= (product.minStock ?? LOW_STOCK_LIMIT);
+  }
+
+  stockLevel(product) {
+    if (product.stock === 0) return { label: 'Sin existencias', className: 'low' };
+    if (this.isLowStock(product)) return { label: 'Stock bajo', className: 'low' };
+    return { label: 'Disponible', className: 'ok' };
   }
 
   render() {
@@ -84,16 +97,18 @@ class InventoryView {
     }));
     categorySelect.value = categories.includes(this.activeCategory) ? this.activeCategory : 'all';
     this.activeCategory = categorySelect.value;
+    const statusSelect = document.getElementById('inventory-status');
+    statusSelect.value = ['activo', 'inactivo', 'all'].includes(this.statusFilter) ? this.statusFilter : 'activo';
+    this.statusFilter = statusSelect.value;
     const filteredProducts = this.products.filter((product) => {
       const matchesCategory = this.activeCategory === 'all' || product.category === this.activeCategory;
       const matchesSearch = !this.searchTerm || product.name.toLocaleLowerCase().includes(this.searchTerm) || String(product.id).includes(this.searchTerm);
-      return matchesCategory && matchesSearch;
+      const matchesStatus = this.statusFilter === 'all' || product.status === this.statusFilter;
+      return matchesCategory && matchesSearch && matchesStatus;
     });
     const inventoryBody = document.getElementById('inventory-body');
     inventoryBody.innerHTML = filteredProducts.length ? filteredProducts.map((product) => {
-      const statusLabel = product.status === 'activo' ? 'Activo' : product.status === 'descontinuado' ? 'Descontinuado' : 'Inactivo';
-      const statusClass = product.status === 'activo' && !this.isLowStock(product) ? 'ok' : 'low';
-      const stockNote = this.isLowStock(product) ? ' · Stock bajo' : '';
+      const level = this.stockLevel(product);
 
       return `
         <tr>
@@ -102,11 +117,13 @@ class InventoryView {
           <td>${escapeHtml(product.category)}</td>
           <td>${this.formatMoney(product.price)}</td>
           <td>${product.stock} unidades</td>
-          <td><span class="badge ${statusClass}">${statusLabel}${stockNote}</span></td>
+          <td><span class="badge ${level.className}">${level.label}</span></td>
           <td class="product-actions">
             <button class="row-action" data-restock="${product.id}">Reponer</button>
             <button class="row-action" data-edit="${product.id}">Editar</button>
-            ${product.status === 'activo' ? `<button class="row-action delete-action" data-delete="${product.id}">Desactivar</button>` : ''}
+            ${product.status === 'activo'
+              ? `<button class="row-action delete-action" data-delete="${product.id}">Desactivar</button>`
+              : `<button class="row-action" data-activate="${product.id}">Activar</button>`}
           </td>
         </tr>`;
     }).join('') : '<tr><td colspan="7" class="muted">No hay productos que coincidan con los filtros.</td></tr>';
@@ -156,6 +173,64 @@ class InventoryView {
     }
   }
 
+  openBulkRestockDialog() {
+    const list = document.getElementById('bulk-restock-list');
+    const sortedProducts = [...this.products].sort((first, second) => first.name.localeCompare(second.name, 'es'));
+    list.innerHTML = sortedProducts.length ? sortedProducts.map((product) => `
+      <tr>
+        <td><strong>${escapeHtml(product.name)}</strong><br><small class="muted">ID ${product.id}${product.status !== 'activo' ? ' · No disponible para venta' : ''}</small></td>
+        <td>${product.stock} unidades</td>
+        <td><input class="bulk-restock-input" data-product-id="${product.id}" type="number" min="0" step="1" value="0" inputmode="numeric" aria-label="Unidades a agregar para ${escapeHtml(product.name)}"></td>
+      </tr>
+    `).join('') : '<tr><td colspan="3" class="muted">No hay productos registrados para reponer.</td></tr>';
+    this.updateBulkRestockSummary();
+    document.getElementById('bulk-restock-dialog').showModal();
+  }
+
+  updateBulkRestockSummary() {
+    const values = [...document.querySelectorAll('.bulk-restock-input')].map((input) => Number(input.value));
+    const invalid = values.some((quantity) => !Number.isInteger(quantity) || quantity < 0);
+    const selected = values.filter((quantity) => Number.isInteger(quantity) && quantity > 0);
+    const summary = document.getElementById('bulk-restock-summary');
+    if (invalid) {
+      summary.textContent = 'Cada cantidad debe ser un número entero igual o mayor que 0.';
+      return;
+    }
+    if (!selected.length) {
+      summary.textContent = 'Aún no hay productos seleccionados.';
+      return;
+    }
+    summary.textContent = `Se agregarán ${selected.reduce((total, quantity) => total + quantity, 0)} unidades en ${selected.length} producto${selected.length === 1 ? '' : 's'}.`;
+  }
+
+  async saveBulkRestock(event) {
+    event.preventDefault();
+    const inputs = [...document.querySelectorAll('.bulk-restock-input')];
+    const items = inputs.map((input) => ({ productId: Number(input.dataset.productId), quantity: Number(input.value) }));
+    if (items.some(({ productId, quantity }) => !Number.isInteger(productId) || !Number.isInteger(quantity) || quantity < 0)) {
+      this.showToast('Revise las cantidades: deben ser números enteros iguales o mayores que 0.');
+      return;
+    }
+    const selectedItems = items.filter(({ quantity }) => quantity > 0);
+    if (!selectedItems.length) {
+      this.showToast('Escriba una cantidad mayor que 0 en al menos un producto.');
+      return;
+    }
+
+    const submit = document.getElementById('save-bulk-restock');
+    submit.disabled = true;
+    try {
+      await this.onBulkRestock(selectedItems);
+      document.getElementById('bulk-restock-dialog').close();
+      const total = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
+      this.showToast(`Inventario repuesto: ${total} unidades en ${selectedItems.length} producto${selectedItems.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      this.showToast(error.message);
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
   openNewProductDialog() {
     this.editingProductId = null;
     document.querySelector('#product-dialog h2').textContent = 'Nuevo producto';
@@ -166,7 +241,6 @@ class InventoryView {
     this.updateColorPreview();
     this.hideNewCategoryField();
     this.hideNewCatalogField('brand');
-    this.hideNewCatalogField('unit');
     document.getElementById('product-dialog').showModal();
   }
 
@@ -181,8 +255,6 @@ class InventoryView {
     document.getElementById('new-category').value = product.category;
     document.getElementById('new-brand').value = product.brand || '';
     document.getElementById('new-name').value = product.name;
-    document.getElementById('new-unit').value = product.unit || '';
-    document.getElementById('new-status').value = product.status || 'activo';
     document.getElementById('new-price').value = product.price;
     document.getElementById('new-stock').value = product.stock;
     document.getElementById('new-min-stock').value = product.minStock ?? 0;
@@ -190,7 +262,6 @@ class InventoryView {
     this.updateColorPreview();
     this.hideNewCategoryField();
     this.hideNewCatalogField('brand');
-    this.hideNewCatalogField('unit');
     document.getElementById('product-dialog').showModal();
   }
 
@@ -208,29 +279,39 @@ class InventoryView {
     }
   }
 
+  async activateProduct(productId) {
+    const product = this.products.find((item) => item.id === Number(productId));
+    if (!product || product.status === 'activo') return;
+    try {
+      await this.onActivateProduct(product.id);
+      this.showToast('Producto activado. Ya puede volver a venderse.');
+    } catch (error) {
+      this.showToast(error.message);
+    }
+  }
+
   async saveProduct(event) {
     event.preventDefault();
     const submit = event.currentTarget;
     const category = document.getElementById('new-category').value;
     const brand = document.getElementById('new-brand').value;
     const name = document.getElementById('new-name').value;
-    const unit = document.getElementById('new-unit').value;
-    const status = document.getElementById('new-status').value;
     const price = Number(document.getElementById('new-price').value);
     const stock = Number(document.getElementById('new-stock').value);
     const minStock = Number(document.getElementById('new-min-stock').value);
     const color = document.getElementById('new-color').value;
 
-    // Evita cerrar el diálogo cuando los datos ingresados no son válidos.
-    if (!category || !brand || !name || !unit || !status || !Number.isFinite(price) || price < 0 || !Number.isInteger(stock) || stock < 0 || !Number.isInteger(minStock) || minStock < 0) {
-      this.showToast('Complete todos los campos del producto.');
-      return;
-    }
+    if (!category) return this.showToast('Seleccione una categoría para el producto.');
+    if (!brand) return this.showToast('Seleccione una marca para el producto.');
+    if (!name.trim()) return this.showToast('Escriba el nombre del producto.');
+    if (!Number.isFinite(price) || price < 0) return this.showToast('Escriba un precio válido, igual o mayor que 0.');
+    if (!Number.isInteger(stock) || stock < 0) return this.showToast('Las existencias deben ser un número entero igual o mayor que 0.');
+    if (!Number.isInteger(minStock) || minStock < 0) return this.showToast('El stock mínimo debe ser un número entero igual o mayor que 0.');
 
     const editingProduct = this.products.find((item) => item.id === this.editingProductId);
     submit.disabled = true;
     try {
-      await this.onSaveProduct({ category, brand, name, unit, status, price, stock, minStock, color }, editingProduct?.id);
+      await this.onSaveProduct({ category, brand, name, price, stock, minStock, color }, editingProduct?.id);
       document.getElementById('product-dialog').close();
       this.showToast(editingProduct ? 'Producto actualizado.' : 'Producto agregado al inventario.');
     } catch (error) {
@@ -243,12 +324,8 @@ class InventoryView {
   populateProductFields(product = null) {
     const categories = [...new Set([...this.products.map((item) => item.category), ...this.extraCategories])];
     const brands = [...new Set([...this.products.map((item) => item.brand).filter(Boolean), ...this.extraBrands])];
-    const units = [...new Set([...this.products.map((item) => item.unit).filter(Boolean), 'pieza', 'kg', 'L', ...this.extraUnits])];
-    const statuses = ['activo', 'inactivo', 'descontinuado'];
     this.setSelectOptions('new-category', categories, product?.category);
     this.setSelectOptions('new-brand', brands, product?.brand);
-    this.setSelectOptions('new-unit', units, product?.unit);
-    this.setSelectOptions('new-status', statuses, product?.status || 'activo');
   }
 
   setSelectOptions(selectId, options, selectedValue) {
@@ -294,7 +371,6 @@ class InventoryView {
     const config = {
       category: { property: 'category', extras: this.extraCategories, label: 'categoría' },
       brand: { property: 'brand', extras: this.extraBrands, label: 'marca' },
-      unit: { property: 'unit', extras: this.extraUnits, label: 'unidad de medida' },
     }[catalog];
     const existingOptions = [...this.products.map((item) => item[config.property]).filter(Boolean), ...config.extras];
     if (!name) {

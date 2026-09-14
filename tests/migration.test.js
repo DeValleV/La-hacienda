@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 
-const migration = readFileSync(new URL('../migrations/0001_initial.sql', import.meta.url), 'utf8');
+const migrationsDirectory = new URL('../migrations/', import.meta.url);
+const migrations = readdirSync(migrationsDirectory)
+  .filter((file) => file.endsWith('.sql'))
+  .sort()
+  .map((file) => readFileSync(new URL(file, migrationsDirectory), 'utf8'));
 
 function createDatabase() {
   const database = new DatabaseSync(':memory:');
-  database.exec(migration);
+  migrations.forEach((migration) => database.exec(migration));
   database.exec(`
     INSERT INTO usuario (rol_id, sucursal_id, nombre, nombre_usuario, password_hash)
     VALUES
@@ -26,6 +30,8 @@ test('la migración crea el modelo y conserva el aislamiento por sucursal', () =
   assert.equal(saleColumns.includes('change'), false);
   assert.equal(saleColumns.includes('metodo_pago'), false);
   assert.equal(database.prepare("SELECT COUNT(*) AS total FROM sqlite_master WHERE type = 'table' AND name = 'movimiento_inventario'").get().total, 0);
+  assert.equal(database.prepare("SELECT COUNT(*) AS total FROM sqlite_master WHERE type = 'table' AND name = 'unidad_medida'").get().total, 0);
+  assert.equal(database.prepare("SELECT COUNT(*) AS total FROM estado WHERE nombre = 'descontinuado'").get().total, 0);
 
   database.prepare('INSERT INTO turno (sucursal_id, abierto_por_usuario_id) VALUES (?, ?)').run(1, 1);
   assert.throws(

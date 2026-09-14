@@ -4,7 +4,7 @@ Este documento describe el modelo de datos para **La Hacienda**, una tienda de v
 
 ## Alcance
 
-El sistema registra catálogos auxiliares compartidos (categorías, marcas y unidades), productos y existencias independientes por sucursal, ventas y el usuario que registra cada venta. No se requiere una entidad `Cliente`: las ventas son de mostrador y normalmente anónimas.
+El sistema registra catálogos auxiliares compartidos (categorías y marcas), productos y existencias independientes por sucursal, ventas y el usuario que registra cada venta. No se requiere una entidad `Cliente`: las ventas son de mostrador y normalmente anónimas.
 
 ## Convenciones
 
@@ -42,16 +42,9 @@ Representa cada ubicación operativa. Cada sucursal tiene su propio catálogo de
 | `id` | entero | PK |
 | `nombre` | texto corto | obligatorio, único |
 
-### `unidad_medida`
-
-| Columna | Tipo lógico | Reglas |
-| --- | --- | --- |
-| `id` | entero | PK |
-| `unidad` | texto corto | obligatorio, único; p. ej. `pieza`, `kg`, `L` |
-
 ### `estado`
 
-Catálogo de estados aplicables a un producto, por ejemplo `activo`, `inactivo` o `descontinuado`.
+Catálogo interno de estados aplicables a un producto: `activo` o `inactivo`.
 
 | Columna | Tipo lógico | Reglas |
 | --- | --- | --- |
@@ -69,7 +62,7 @@ Catálogo de roles de acceso: `administrador`, `encargado` y `cajero`.
 
 ### `producto`
 
-Representa la unidad vendible e inventariable. Cada producto pertenece a una sola sucursal; no se comparten productos ni existencias entre sucursales.
+Representa el producto vendible e inventariable. Cada producto pertenece a una sola sucursal; no se comparten productos ni existencias entre sucursales.
 
 | Columna | Tipo lógico | Reglas |
 | --- | --- | --- |
@@ -77,7 +70,6 @@ Representa la unidad vendible e inventariable. Cada producto pertenece a una sol
 | `sucursal_id` | entero | FK a `sucursal.id`, obligatorio |
 | `categoria_id` | entero | FK a `categoria.id`, obligatorio |
 | `marca_id` | entero | FK a `marca.id`, obligatorio |
-| `unidad_medida_id` | entero | FK a `unidad_medida.id`, obligatorio |
 | `estado_id` | entero | FK a `estado.id`, obligatorio |
 | `nombre_base` | texto corto | obligatorio |
 | `precio_centavos` | entero | obligatorio, no negativo |
@@ -181,7 +173,6 @@ La clave primaria compuesta (`venta_id`, `producto_id`) permite un solo renglón
 
 ```text
 categoria 1 ── N producto N ── 1 marca
-producto  N ── 1 unidad_medida
 producto  N ── 1 estado
 sucursal 1 ── N producto
 sucursal 1 ── N turno
@@ -195,8 +186,8 @@ usuario     1 ── N sesion
 
 ## Reglas de integridad
 
-- No se puede eliminar una categoría, marca, unidad, estado, usuario, tipo de venta o producto que esté en uso; preferir desactivarlo.
-- Un producto que ya se haya usado no se elimina: se cambia a `inactivo` o `descontinuado`.
+- No se puede eliminar una categoría, marca, estado, usuario, tipo de venta o producto que esté en uso; preferir desactivarlo.
+- Un producto que ya se haya usado no se elimina: se cambia a `inactivo`.
 - Cada producto debe pertenecer a una categoría y tener un `color_tarjeta` válido para su representación en el POS.
 - Sólo se almacenan hashes de contraseña. La aplicación debe verificar la contraseña con el mismo algoritmo que creó el hash.
 - El acceso a funciones administrativas debe validarse a partir del `rol` del usuario autenticado.
@@ -210,7 +201,7 @@ usuario     1 ── N sesion
 
 ## Correspondencia física en Cloudflare D1
 
-La migración versionada es `migrations/0001_initial.sql`. Implementa los importes como `INTEGER` (`precio_centavos`, `total_centavos` y `precio_unitario_centavos`), usa índices parciales para impedir dos turnos abiertos en una sucursal y triggers para validar:
+Las migraciones versionadas implementan los importes como `INTEGER` (`precio_centavos`, `total_centavos` y `precio_unitario_centavos`), usan índices parciales para impedir dos turnos abiertos en una sucursal y triggers para validar:
 
 - usuario y sucursal al abrir o cerrar un turno;
 - turno abierto, usuario y sucursal al crear una venta;
@@ -218,6 +209,8 @@ La migración versionada es `migrations/0001_initial.sql`. Implementa los import
 - descuento de stock y acumulación del total a partir del precio histórico.
 
 La API no acepta un total calculado por el navegador. Obtiene el nombre y el precio desde `producto`, los copia a `detalle_venta` y deja que la base actualice el total.
+
+`0002_remove_units_and_discontinued.sql` conserva los productos existentes y elimina de forma segura la columna y catálogo de unidades de medida, así como el estado `descontinuado`.
 
 ## Compatibilidad con motores
 

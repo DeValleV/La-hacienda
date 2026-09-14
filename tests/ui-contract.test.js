@@ -26,6 +26,20 @@ test('todos los IDs usados por las vistas existen y no están duplicados', () =>
 test('el historial se presenta sin controles de edición', () => {
   const history = html.match(/<section id="historial"[\s\S]*?<section id="configuracion"/)?.[0] || '';
   assert.notEqual(history, '');
-  assert.doesNotMatch(history, /<(?:button|input|select|textarea)\b/i);
+  assert.match(history, /id="history-date-picker"/);
+  assert.doesNotMatch(history, /<(?:input|select|textarea)\b/i);
   assert.doesNotMatch(scripts, /changeSaleType|changeQuantity\(saleId|deleteSale\(/);
+});
+
+test('el calendario del historial sólo ofrece días registrados y agrupa por turno', () => {
+  assert.match(html, /id="history-calendar-dialog"/);
+  assert.match(scripts, /button\.disabled = !availableDates\.has\(date\)/);
+  assert.match(scripts, /<details class="panel history-shift" open>/);
+});
+
+test('los diálogos pueden cerrarse sin enviar formularios y la reposición rápida existe', () => {
+  assert.match(html, /id="bulk-restock-dialog"/);
+  assert.match(html, /id="bulk-restock"/);
+  assert.doesNotMatch(html, /<button(?:\s[^>]*)?\svalue="cancel"/);
+  assert.match(scripts, /data-dialog-close/);
 });

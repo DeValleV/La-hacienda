@@ -94,13 +94,16 @@ class SettingsView {
     const submit = event.currentTarget.querySelector('[type="submit"]');
     const id = Number(document.getElementById('user-id').value) || null;
     const payload = {
-      name: document.getElementById('user-name').value,
-      username: document.getElementById('user-username').value,
+      name: document.getElementById('user-name').value.trim(),
+      username: document.getElementById('user-username').value.trim(),
       role: document.getElementById('user-role').value,
       password: document.getElementById('user-password').value,
       active: document.getElementById('user-active').checked,
     };
+    if (!payload.name) return this.showToast('Escriba el nombre de la persona usuaria.');
+    if (!payload.username) return this.showToast('Escriba el nombre de usuario para iniciar sesión.');
     if (!id && !payload.password) return this.showToast('La contraseña es obligatoria para un usuario nuevo.');
+    if (payload.password && payload.password.length < 10) return this.showToast('La contraseña debe tener al menos 10 caracteres.');
     submit.disabled = true;
     try {
       if (id) await this.api.updateUser(id, payload); else await this.api.createUser(payload);
@@ -137,11 +140,13 @@ class SettingsView {
     const submit = event.currentTarget.querySelector('[type="submit"]');
     const id = Number(document.getElementById('branch-id').value) || null;
     const payload = {
-      name: document.getElementById('branch-name').value,
-      code: document.getElementById('branch-code').value,
-      address: document.getElementById('branch-address').value,
+      name: document.getElementById('branch-name').value.trim(),
+      code: document.getElementById('branch-code').value.trim(),
+      address: document.getElementById('branch-address').value.trim(),
       active: document.getElementById('branch-active').checked,
     };
+    if (!payload.name) return this.showToast('Escriba el nombre de la sucursal.');
+    if (!payload.code) return this.showToast('Escriba un código para identificar la sucursal.');
     submit.disabled = true;
     try {
       if (id) await this.api.updateBranch(id, payload); else await this.api.createBranch(payload);
@@ -160,9 +165,11 @@ class SettingsView {
     const submit = event.currentTarget.querySelector('[type="submit"]');
     const type = document.getElementById('catalog-type').value;
     const input = document.getElementById('catalog-name');
+    const name = input.value.trim();
+    if (!name) return this.showToast('Escriba el nombre que desea agregar al catálogo.');
     submit.disabled = true;
     try {
-      await this.api.createCatalogItem(type, input.value);
+      await this.api.createCatalogItem(type, name);
       input.value = '';
       await this.load();
       this.showToast('Elemento agregado.');

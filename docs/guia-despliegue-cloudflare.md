@@ -32,7 +32,7 @@ No se requieren Cloudflare Pages, R2, KV, servidor propio ni una base de datos e
 - Turnos: sólo uno abierto por sucursal; no se puede cobrar fuera de un turno.
 - Historial de ventas de sólo lectura con producto, nombre y precio históricos.
 - Configuración de usuarios de la sucursal actual, sucursales y catálogos compartidos.
-- Exportación CSV de inventario y de ventas del turno.
+- Exportación Excel (`.xlsx`) de inventario y de ventas del turno.
 
 Las reglas del modelo están explicadas en [database-schema.md](database-schema.md) y la arquitectura técnica en [arquitectura-propuesta.md](arquitectura-propuesta.md).
 
@@ -41,7 +41,7 @@ Las reglas del modelo están explicadas en [database-schema.md](database-schema.
 - No se guardan método de pago, importe recibido ni cambio.
 - No hay SKU: el identificador del producto es `producto.id`.
 - No existe una tabla de movimientos de inventario. Las ventas y los turnos sí dejan trazabilidad; las reposiciones sólo cambian el stock actual.
-- Categorías, marcas y unidades son compartidas; los productos y sus existencias no se comparten entre sucursales.
+- Categorías y marcas son compartidas; los productos y sus existencias no se comparten entre sucursales.
 - Un administrador administra usuarios de la sucursal donde inició sesión. Al crear una sucursal nueva, hay que crear su administrador inicial antes de retirar el secreto de inicialización.
 
 ## 2. Archivos que no se deben modificar sin entender su función
@@ -51,7 +51,7 @@ Las reglas del modelo están explicadas en [database-schema.md](database-schema.
 | `public/` | Interfaz que se publica como asset estático. |
 | `src/worker.js` | API, autorización, sesión, ventas y reglas de negocio. |
 | `src/auth.js` | Hash de contraseñas, tokens y cookies de sesión. |
-| `migrations/0001_initial.sql` | Esquema inicial, restricciones, triggers y datos semilla. |
+| `migrations/` | Esquema inicial, restricciones, triggers, datos semilla y cambios versionados. |
 | `wrangler.toml` | Nombres de Workers, assets y bindings D1 por entorno. |
 | `.dev.vars` | Secreto local. No existe en Git y no se debe subir. |
 
@@ -93,7 +93,7 @@ pnpm run db:migrate:local
 pnpm run dev
 ```
 
-Wrangler crea una D1 local, aplica `migrations/0001_initial.sql` y muestra una URL, normalmente `http://localhost:8787`. Mantén ese proceso abierto y usa esa URL en el navegador.
+Wrangler crea una D1 local, aplica todas las migraciones en orden y muestra una URL, normalmente `http://localhost:8787`. Mantén ese proceso abierto y usa esa URL en el navegador.
 
 ### Paso 3: crear administradores locales
 
@@ -209,7 +209,7 @@ Antes de producción, realiza esta lista con cuentas reales de prueba:
 - No se puede cobrar sin turno abierto ni abrir dos turnos en la misma sucursal.
 - Un producto desactivado no aparece para cobrar y conserva su historial.
 - Un producto de Centro no aparece ni se puede vender desde Norte.
-- Exportación CSV de inventario y de ventas del turno.
+- Exportación Excel (`.xlsx`) de inventario y de ventas del turno.
 - Cierre de turno con usuario y fecha correctos.
 
 Revisa errores en **Workers & Pages → Worker → Observability/Logs**. El proyecto habilita observabilidad en `wrangler.toml`.
@@ -249,7 +249,7 @@ No uses una Route para este caso salvo que el hostname ya tenga un servidor de o
 ## 9. Operación diaria y cambios futuros
 
 - Las personas usan la interfaz; no deben ejecutar SQL directamente sobre producción.
-- Exporta periódicamente los CSV de ventas y guárdalos fuera del equipo de caja.
+- Exporta periódicamente los archivos Excel (`.xlsx`) de ventas y guárdalos fuera del equipo de caja.
 - Antes de una migración nueva: prueba local, aplica a staging, valida y luego aplica a producción.
 - D1 ofrece Time Travel para recuperación a un punto en el tiempo; verifica su disponibilidad en la cuenta antes de depender de él como procedimiento de recuperación.
 - Revisa Logs tras cada despliegue y nunca incluyas contraseñas, tokens ni información sensible en `console.log`.

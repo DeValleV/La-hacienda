@@ -112,7 +112,6 @@ async function catalogId(db, table, column, value) {
   const allowed = new Map([
     ['categoria:nombre', ['categoria', 'nombre']],
     ['marca:nombre', ['marca', 'nombre']],
-    ['unidad_medida:unidad', ['unidad_medida', 'unidad']],
   ]);
   const target = allowed.get(`${table}:${column}`);
   if (!target) throw new Error('Catálogo no permitido.');
@@ -124,7 +123,7 @@ async function catalogId(db, table, column, value) {
 
 function mapProduct(row) {
   return {
-    id: row.id, name: row.name, category: row.category, brand: row.brand, unit: row.unit,
+    id: row.id, name: row.name, category: row.category, brand: row.brand,
     status: row.status, price: row.priceCents / 100, stock: row.stock,
     minStock: row.minStock, color: row.color,
   };
@@ -132,26 +131,17 @@ function mapProduct(row) {
 
 const PRODUCT_SELECT = `
   SELECT p.id, p.nombre_base AS name, c.nombre AS category, m.nombre AS brand,
-         um.unidad AS unit, e.nombre AS status, p.precio_centavos AS priceCents,
+         e.nombre AS status, p.precio_centavos AS priceCents,
          p.stock, p.stock_minimo AS minStock, p.color_tarjeta AS color
   FROM producto p JOIN categoria c ON c.id = p.categoria_id
-  JOIN marca m ON m.id = p.marca_id JOIN unidad_medida um ON um.id = p.unidad_medida_id
-  JOIN estado e ON e.id = p.estado_id`;
+  JOIN marca m ON m.id = p.marca_id JOIN estado e ON e.id = p.estado_id`;
 
 async function productValues(db, payload) {
   const color = requireText(payload.color, 'color', 7);
   if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new ApiError(400, 'color no es válido.', 'VALIDATION_ERROR');
-  const statusName = requireText(payload.status, 'estado', 30).toLowerCase();
-  if (!new Set(['activo', 'inactivo', 'descontinuado']).has(statusName)) {
-    throw new ApiError(400, 'estado no es válido.', 'VALIDATION_ERROR');
-  }
-  const status = await db.prepare('SELECT id FROM estado WHERE nombre = ?').bind(statusName).first();
-  if (!status) throw new ApiError(500, 'El catálogo de estados no está inicializado.', 'CATALOG_NOT_INITIALIZED');
   return {
     categoryId: await catalogId(db, 'categoria', 'nombre', payload.category),
     brandId: await catalogId(db, 'marca', 'nombre', payload.brand),
-    unitId: await catalogId(db, 'unidad_medida', 'unidad', payload.unit),
-    statusId: status.id,
     name: requireText(payload.name, 'nombre', 120),
     priceCents: moneyToCents(payload.price), stock: requireInteger(payload.stock, 'stock'),
     minStock: requireInteger(payload.minStock, 'stock mínimo'), color,
@@ -167,9 +157,9 @@ async function createProduct(request, env, session) {
   requireSession(session, PRODUCT_ROLES);
   const values = await productValues(env.DB, await bodyJson(request));
   const result = await env.DB.prepare(`
-    INSERT INTO producto (sucursal_id, categoria_id, marca_id, unidad_medida_id, estado_id, nombre_base, precio_centavos, stock, stock_minimo, color_tarjeta)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(session.branchId, values.categoryId, values.brandId, values.unitId, values.statusId, values.name, values.priceCents, values.stock, values.minStock, values.color).run();
+    INSERT INTO producto (sucursal_id, categoria_id, marca_id, estado_id, nombre_base, precio_centavos, stock, stock_minimo, color_tarjeta)
+    VALUES (?, ?, ?, (SELECT id FROM estado WHERE nombre = 'activo'), ?, ?, ?, ?, ?)
+  `).bind(session.branchId, values.categoryId, values.brandId, values.name, values.priceCents, values.stock, values.minStock, values.color).run();
   const row = await env.DB.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.sucursal_id = ?`).bind(result.meta.last_row_id, session.branchId).first();
   return json({ product: mapProduct(row) }, 201);
 }
@@ -178,10 +168,9 @@ async function updateProduct(request, env, session, productId) {
   requireSession(session, PRODUCT_ROLES);
   const values = await productValues(env.DB, await bodyJson(request));
   const result = await env.DB.prepare(`
-    UPDATE producto SET categoria_id = ?, marca_id = ?, unidad_medida_id = ?, estado_id = ?,
-      nombre_base = ?, precio_centavos = ?, stock = ?, stock_minimo = ?, color_tarjeta = ?
+    UPDATE producto SET categoria_id = ?, marca_id = ?, nombre_base = ?, precio_centavos = ?, stock = ?, stock_minimo = ?, color_tarjeta = ?
     WHERE id = ? AND sucursal_id = ?
-  `).bind(values.categoryId, values.brandId, values.unitId, values.statusId, values.name, values.priceCents, values.stock, values.minStock, values.color, productId, session.branchId).run();
+  `).bind(values.categoryId, values.brandId, values.name, values.priceCents, values.stock, values.minStock, values.color, productId, session.branchId).run();
   if (!result.meta.changes) throw new ApiError(404, 'Producto no encontrado.', 'NOT_FOUND');
   const row = await env.DB.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.sucursal_id = ?`).bind(productId, session.branchId).first();
   return json({ product: mapProduct(row) });
@@ -195,9 +184,42 @@ async function restockProduct(request, env, session, productId) {
   return json({ ok: true });
 }
 
+async function restockProducts(request, env, session) {
+  requireSession(session, PRODUCT_ROLES);
+  const rawItems = (await bodyJson(request)).items;
+  if (!Array.isArray(rawItems) || !rawItems.length || rawItems.length > 100) {
+    throw new ApiError(400, 'Seleccione entre 1 y 100 productos para reponer.', 'VALIDATION_ERROR');
+  }
+  const quantities = new Map();
+  rawItems.forEach((item) => {
+    const productId = requireInteger(item?.productId, 'producto', 1);
+    const quantity = requireInteger(item?.quantity, 'cantidad', 1);
+    quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+  });
+  const productIds = [...quantities.keys()];
+  const markers = productIds.map(() => '?').join(', ');
+  const available = await env.DB.prepare(`SELECT id FROM producto WHERE sucursal_id = ? AND id IN (${markers})`)
+    .bind(session.branchId, ...productIds).all();
+  if (available.results.length !== productIds.length) {
+    throw new ApiError(404, 'Uno de los productos ya no existe o pertenece a otra sucursal.', 'NOT_FOUND');
+  }
+  await env.DB.batch([...quantities.entries()].map(([productId, quantity]) => (
+    env.DB.prepare('UPDATE producto SET stock = stock + ? WHERE id = ? AND sucursal_id = ?')
+      .bind(quantity, productId, session.branchId)
+  )));
+  return json({ ok: true, products: productIds.length });
+}
+
 async function deactivateProduct(env, session, productId) {
   requireSession(session, PRODUCT_ROLES);
   const result = await env.DB.prepare("UPDATE producto SET estado_id = (SELECT id FROM estado WHERE nombre = 'inactivo') WHERE id = ? AND sucursal_id = ?").bind(productId, session.branchId).run();
+  if (!result.meta.changes) throw new ApiError(404, 'Producto no encontrado.', 'NOT_FOUND');
+  return json({ ok: true });
+}
+
+async function activateProduct(env, session, productId) {
+  requireSession(session, PRODUCT_ROLES);
+  const result = await env.DB.prepare("UPDATE producto SET estado_id = (SELECT id FROM estado WHERE nombre = 'activo') WHERE id = ? AND sucursal_id = ?").bind(productId, session.branchId).run();
   if (!result.meta.changes) throw new ApiError(404, 'Producto no encontrado.', 'NOT_FOUND');
   return json({ ok: true });
 }
@@ -305,15 +327,77 @@ async function loadSale(db, session, saleId) {
   };
 }
 
-async function listSales(env, session) {
+async function listSales(request, env, session) {
+  const cashier = session.role === 'cajero';
+  const url = new URL(request.url);
+  const month = url.searchParams.get('month') || null;
+  const date = url.searchParams.get('date') || null;
+  if (month && date) throw new ApiError(400, 'Seleccione un mes o un día, no ambos.', 'VALIDATION_ERROR');
+  if (month && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    throw new ApiError(400, 'El mes seleccionado no tiene un formato válido.', 'VALIDATION_ERROR');
+  }
+  if (date && !/^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(date)) {
+    throw new ApiError(400, 'El día seleccionado no tiene un formato válido.', 'VALIDATION_ERROR');
+  }
+  const statement = env.DB.prepare(`
+    SELECT v.id FROM venta v WHERE v.sucursal_id = ? ${cashier ? 'AND v.usuario_id = ?' : ''} ${month ? "AND strftime('%Y-%m', v.fecha_hora) = ?" : ''} ${date ? "AND date(v.fecha_hora) = ?" : ''}
+    ORDER BY v.fecha_hora DESC LIMIT ${month || date ? 1000 : 200}
+  `);
+  const params = [session.branchId];
+  if (cashier) params.push(session.userId);
+  if (month) params.push(month);
+  if (date) params.push(date);
+  const result = await statement.bind(...params).all();
+  const sales = await Promise.all(result.results.map((row) => loadSale(env.DB, session, row.id)));
+  let shifts = [];
+  if (date) {
+    const shiftStatement = env.DB.prepare(`
+      SELECT t.id, t.fecha_apertura AS openedAt, t.fecha_cierre AS closedAt, t.estado AS status,
+             opener.nombre AS openedBy, closer.nombre AS closedBy
+      FROM turno t JOIN usuario opener ON opener.id = t.abierto_por_usuario_id
+      LEFT JOIN usuario closer ON closer.id = t.cerrado_por_usuario_id
+      WHERE t.sucursal_id = ? AND (
+        date(t.fecha_apertura) = ? OR EXISTS (SELECT 1 FROM venta v WHERE v.turno_id = t.id AND date(v.fecha_hora) = ?)
+      )
+        ${cashier ? 'AND EXISTS (SELECT 1 FROM venta v WHERE v.turno_id = t.id AND v.usuario_id = ?)' : ''}
+      ORDER BY t.fecha_apertura
+    `);
+    const shiftResult = cashier
+      ? await shiftStatement.bind(session.branchId, date, date, session.userId).all()
+      : await shiftStatement.bind(session.branchId, date, date).all();
+    shifts = shiftResult.results;
+  }
+  return json({ sales, shifts });
+}
+
+async function listSaleDays(request, env, session) {
+  const month = new URL(request.url).searchParams.get('month');
+  if (!month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    throw new ApiError(400, 'Seleccione un mes válido para consultar sus días.', 'VALIDATION_ERROR');
+  }
   const cashier = session.role === 'cajero';
   const statement = env.DB.prepare(`
-    SELECT v.id FROM venta v WHERE v.sucursal_id = ? ${cashier ? 'AND v.usuario_id = ?' : ''}
-    ORDER BY v.fecha_hora DESC LIMIT 200
+    SELECT date(v.fecha_hora) AS date, COUNT(*) AS salesCount, SUM(v.total_centavos) AS totalCents
+    FROM venta v WHERE v.sucursal_id = ? ${cashier ? 'AND v.usuario_id = ?' : ''}
+      AND strftime('%Y-%m', v.fecha_hora) = ?
+    GROUP BY date(v.fecha_hora) ORDER BY date DESC
   `);
-  const result = cashier ? await statement.bind(session.branchId, session.userId).all() : await statement.bind(session.branchId).all();
-  const sales = await Promise.all(result.results.map((row) => loadSale(env.DB, session, row.id)));
-  return json({ sales });
+  const params = cashier ? [session.branchId, session.userId, month] : [session.branchId, month];
+  const result = await statement.bind(...params).all();
+  return json({ days: result.results.map((entry) => ({ date: entry.date, salesCount: entry.salesCount, total: entry.totalCents / 100 })) });
+}
+
+async function listSaleMonths(env, session) {
+  const cashier = session.role === 'cajero';
+  const statement = env.DB.prepare(`
+    SELECT strftime('%Y-%m', v.fecha_hora) AS month, COUNT(*) AS salesCount
+    FROM venta v WHERE v.sucursal_id = ? ${cashier ? 'AND v.usuario_id = ?' : ''}
+    GROUP BY strftime('%Y-%m', v.fecha_hora) ORDER BY month DESC
+  `);
+  const result = cashier
+    ? await statement.bind(session.branchId, session.userId).all()
+    : await statement.bind(session.branchId).all();
+  return json({ months: result.results.map((entry) => ({ month: entry.month, salesCount: entry.salesCount })) });
 }
 
 async function login(request, env) {
@@ -411,7 +495,6 @@ async function updateBranch(request, env, branchId) {
 const CATALOGS = {
   categories: ['categoria', 'nombre'],
   brands: ['marca', 'nombre'],
-  units: ['unidad_medida', 'unidad'],
   statuses: ['estado', 'nombre'],
   saleTypes: ['tipo_venta', 'nombre'],
   roles: ['rol', 'nombre'],
@@ -420,7 +503,6 @@ const CATALOGS = {
 const EDITABLE_CATALOGS = {
   categories: CATALOGS.categories,
   brands: CATALOGS.brands,
-  units: CATALOGS.units,
 };
 
 async function listCatalogs(env) {
@@ -469,7 +551,9 @@ async function handleApi(request, env) {
   if (method === 'GET' && pathname === '/api/products') return listProducts(env, session);
   if (method === 'POST' && pathname === '/api/products') return createProduct(request, env, session);
   if (method === 'POST' && pathname === '/api/sales') return createSale(request, env, session);
-  if (method === 'GET' && pathname === '/api/sales') return listSales(env, session);
+  if (method === 'GET' && pathname === '/api/sales/months') return listSaleMonths(env, session);
+  if (method === 'GET' && pathname === '/api/sales/days') return listSaleDays(request, env, session);
+  if (method === 'GET' && pathname === '/api/sales') return listSales(request, env, session);
   if (method === 'GET' && pathname === '/api/shifts/current') return currentShift(env, session);
   if (method === 'POST' && pathname === '/api/shifts/open') return openShift(env, session);
   if (method === 'POST' && pathname === '/api/shifts/current/close') return closeShift(env, session);
@@ -513,8 +597,11 @@ async function handleApi(request, env) {
   if (updateMatch && method === 'PATCH') return updateProduct(request, env, session, Number(updateMatch[1]));
   const restockMatch = pathname.match(/^\/api\/products\/(\d+)\/restock$/);
   if (restockMatch && method === 'POST') return restockProduct(request, env, session, Number(restockMatch[1]));
+  if (method === 'POST' && pathname === '/api/products/restock-batch') return restockProducts(request, env, session);
   const deactivateMatch = pathname.match(/^\/api\/products\/(\d+)\/deactivate$/);
   if (deactivateMatch && method === 'POST') return deactivateProduct(env, session, Number(deactivateMatch[1]));
+  const activateMatch = pathname.match(/^\/api\/products\/(\d+)\/activate$/);
+  if (activateMatch && method === 'POST') return activateProduct(env, session, Number(activateMatch[1]));
 
   throw new ApiError(404, 'Ruta no encontrada.', 'NOT_FOUND');
 }

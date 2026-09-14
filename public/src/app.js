@@ -15,7 +15,9 @@ class PointOfSaleApp {
       showToast: this.showToast.bind(this),
       onSaveProduct: this.saveProduct.bind(this),
       onRestockProduct: this.restockProduct.bind(this),
+      onBulkRestock: this.bulkRestockProducts.bind(this),
       onDeactivateProduct: this.deactivateProduct.bind(this),
+      onActivateProduct: this.activateProduct.bind(this),
     });
     this.sales = new SalesView({
       products,
@@ -25,7 +27,11 @@ class PointOfSaleApp {
       onCheckout: this.checkout.bind(this),
     });
     this.shiftSummary = new ShiftSummaryView({ products, salesHistory, formatMoney, showToast: this.showToast.bind(this), onToggleShift: this.toggleShift.bind(this) });
-    this.history = new HistoryView({ salesHistory, formatMoney });
+    this.history = new HistoryView({
+      formatMoney,
+      onDateChange: this.loadHistoryDate.bind(this),
+      onMonthChange: this.loadHistoryMonth.bind(this),
+    });
     this.settings = new SettingsView({
       api: this.api,
       showToast: this.showToast.bind(this),
@@ -34,6 +40,7 @@ class PointOfSaleApp {
 
     this.bindNavigation();
     this.bindSidebarToggle();
+    this.bindDialogs();
     this.bindLogin();
     document.getElementById('logout').onclick = () => this.logout();
     document.getElementById('export-inventory').onclick = () => this.exportInventory();
@@ -75,12 +82,19 @@ class PointOfSaleApp {
     document.getElementById('login-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       const submit = event.currentTarget.querySelector('[type="submit"]');
+      const branchId = Number(document.getElementById('login-branch').value);
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      if (!Number.isInteger(branchId) || branchId < 1 || !username || !password) {
+        this.showLoginError('Seleccione una sucursal y escriba su usuario y contraseña.');
+        return;
+      }
       submit.disabled = true;
       try {
         await this.api.login({
-          branchId: Number(document.getElementById('login-branch').value),
-          username: document.getElementById('login-username').value.trim(),
-          password: document.getElementById('login-password').value,
+          branchId,
+          username,
+          password,
         });
         const { user } = await this.api.getSession();
         document.getElementById('login-error').hidden = true;
@@ -99,6 +113,7 @@ class PointOfSaleApp {
   async startSession(user) {
     this.setLoading(true);
     this.currentSession = user;
+    this.history.reset();
     document.getElementById('login-screen').hidden = true;
     document.getElementById('app-shell').hidden = false;
     document.getElementById('session-user').textContent = `${user.name} · ${user.role} · ${user.branchName}`;
@@ -112,7 +127,7 @@ class PointOfSaleApp {
       this.shiftSummary.setShift(shift);
       this.inventory.setCatalogs(catalogs);
       this.syncShiftUi();
-      await this.refreshData();
+      await Promise.all([this.refreshData(), this.loadHistory()]);
       if (user.role === 'administrador') await this.settings.load();
       this.showView('ventas');
     } catch (error) {
@@ -148,6 +163,7 @@ class PointOfSaleApp {
     document.getElementById('session-user').textContent = '';
     products.splice(0);
     salesHistory.splice(0);
+    this.history.reset();
     this.renderAll();
     this.showLogin();
   }
@@ -162,6 +178,7 @@ class PointOfSaleApp {
     summaryButton.hidden = !canManageInventory;
     settingsButton.hidden = !isAdmin;
     document.getElementById('add-product').hidden = !canManageInventory;
+    document.getElementById('bulk-restock').hidden = !canManageInventory;
   }
 
   async refreshData() {
@@ -182,14 +199,24 @@ class PointOfSaleApp {
     await this.loadProducts();
   }
 
+  async bulkRestockProducts(items) {
+    await this.api.restockProducts(items);
+    await this.loadProducts();
+  }
+
   async deactivateProduct(productId) {
     await this.api.deactivateProduct(productId);
     await this.loadProducts();
   }
 
+  async activateProduct(productId) {
+    await this.api.activateProduct(productId);
+    await this.loadProducts();
+  }
+
   async checkout(sale) {
     await this.api.createSale(sale);
-    await this.refreshData();
+    await Promise.all([this.refreshData(), this.loadHistory(true)]);
   }
 
   async toggleShift() {
@@ -231,6 +258,46 @@ class PointOfSaleApp {
     this.renderAll();
   }
 
+  async loadHistory(refreshSelectedDate = false) {
+    const { months } = await this.api.getSalesMonths();
+    this.history.setMonths(months);
+    if (!months.length) return;
+    const selectedDate = this.history.selectedDate;
+    const selectedMonth = selectedDate?.slice(0, 7);
+    const month = refreshSelectedDate && selectedMonth && months.some((entry) => entry.month === selectedMonth)
+      ? selectedMonth
+      : months[0].month;
+    await this.loadHistoryMonth(month);
+    const days = this.history.daysByMonth.get(month) || [];
+    const date = refreshSelectedDate && selectedDate && days.some((entry) => entry.date === selectedDate)
+      ? selectedDate
+      : days[0]?.date;
+    if (date) {
+      this.history.setSelectedDate(date);
+      await this.loadHistoryDate(date);
+    }
+  }
+
+  async loadHistoryMonth(month) {
+    try {
+      const { days } = await this.api.getSalesDays(month);
+      this.history.setDays(month, days);
+    } catch (error) {
+      this.showToast(error.message);
+      throw error;
+    }
+  }
+
+  async loadHistoryDate(date) {
+    try {
+      const { sales, shifts } = await this.api.getSales({ date });
+      this.history.setDaySales(sales, shifts);
+    } catch (error) {
+      this.showToast(error.message);
+      throw error;
+    }
+  }
+
   renderAll() {
     this.inventory.render();
     this.sales.render();
@@ -243,32 +310,46 @@ class PointOfSaleApp {
     document.getElementById('app-shell').setAttribute('aria-busy', String(loading));
   }
 
-  downloadCsv(filename, rows) {
-    const csv = rows.map((row) => row.map((value) => {
-      const text = String(value ?? '');
-      const safeText = /^[=+\-@]/.test(text.trimStart()) ? `'${text}` : text;
-      return `"${safeText.replaceAll('"', '""')}"`;
-    }).join(',')).join('\n');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  }
-
   exportInventory() {
-    this.downloadCsv('inventario.csv', [
-      ['ID', 'Producto', 'Categoría', 'Marca', 'Unidad', 'Precio', 'Existencias', 'Stock mínimo', 'Estado'],
-      ...products.map((product) => [product.id, product.name, product.category, product.brand, product.unit, product.price.toFixed(2), product.stock, product.minStock, product.status]),
-    ]);
+    window.downloadXlsx('inventario.xlsx', [{
+      name: 'Inventario',
+      columns: [
+        { width: 10 }, { width: 30 }, { width: 18 }, { width: 22 }, { width: 14, type: 'currency' },
+        { width: 15 }, { width: 15 }, { width: 15 },
+      ],
+      rows: [
+        ['ID', 'Producto', 'Categoría', 'Marca', 'Precio', 'Existencias', 'Stock mínimo', 'Estado'],
+        ...products.map((product) => [product.id, product.name, product.category, product.brand, product.price, product.stock, product.minStock, product.status]),
+      ],
+    }]);
+    this.showToast('Se descargó el inventario en formato Excel.');
   }
 
   exportSales() {
     const shiftSales = salesHistory.filter((sale) => sale.turnId === this.currentShift?.id);
-    this.downloadCsv('ventas-turno.csv', [
-      ['ID venta', 'Fecha', 'Usuario', 'Tipo', 'Producto', 'Cantidad', 'Precio unitario', 'Total venta'],
-      ...shiftSales.flatMap((sale) => sale.lines.map((line) => [sale.id, sale.date, sale.userName, sale.tipoVenta, line.productName, line.qty, line.price.toFixed(2), sale.total.toFixed(2)])),
-    ]);
+    window.downloadXlsx('ventas-turno.xlsx', [{
+      name: 'Ventas del turno',
+      columns: [
+        { width: 20 }, { width: 23 }, { width: 26 }, { width: 15 }, { width: 32 },
+        { width: 12 }, { width: 16, type: 'currency' }, { width: 16, type: 'currency' },
+      ],
+      rows: [
+        ['ID venta', 'Fecha', 'Usuario', 'Tipo', 'Producto', 'Cantidad', 'Precio unitario', 'Total venta'],
+        ...shiftSales.flatMap((sale) => sale.lines.map((line) => [sale.id, sale.date, sale.userName, sale.tipoVenta, line.productName, line.qty, line.price, sale.total])),
+      ],
+    }]);
+    this.showToast('Se descargó el reporte del turno en formato Excel.');
+  }
+
+  bindDialogs() {
+    document.querySelectorAll('dialog').forEach((dialog) => {
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close('cancel');
+      });
+      dialog.querySelectorAll('[data-dialog-close]').forEach((button) => {
+        button.addEventListener('click', () => dialog.close('cancel'));
+      });
+    });
   }
 
   bindNavigation() {

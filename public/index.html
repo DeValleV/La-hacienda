@@ -10,7 +10,7 @@
 </head>
 <body>
   <section id="login-screen" class="login-screen" aria-labelledby="login-title">
-    <form id="login-form" class="login-card">
+    <form id="login-form" class="login-card" novalidate>
       <div class="login-brand"><strong>Gestión La Hacienda</strong><span>Comedor industrial</span></div>
       <div><p class="eyebrow">ACCESO AL SISTEMA</p><h1 id="login-title">Iniciar sesión</h1><p class="muted">Seleccione la sucursal donde trabajará durante este turno.</p></div>
       <label for="login-branch">Sucursal<select id="login-branch" required disabled><option value="">Cargando sucursales…</option></select></label>
@@ -48,7 +48,7 @@
     <section id="inventario" class="view">
       <div class="title-row">
         <div><p class="eyebrow">GESTIÓN DE EXISTENCIAS</p><h1>Inventario actual</h1></div>
-        <div class="actions"><button class="secondary" id="export-inventory">⇩ Exportar</button><button class="primary" id="add-product">＋ Nuevo producto</button></div>
+        <div class="actions"><button class="secondary" id="export-inventory">⇩ Exportar Excel</button><button class="secondary" id="bulk-restock">＋ Reponer inventario</button><button class="primary" id="add-product">＋ Nuevo producto</button></div>
       </div>
       <div class="inventory-search search">⌕ <input id="inventory-search" placeholder="Buscar productos por nombre o ID…"></div>
       <div class="stats">
@@ -57,10 +57,10 @@
         <article><span>Valor de inventario</span><strong id="inventory-value">$0.00</strong><small>Actualizado ahora</small></article>
       </div>
       <div class="panel">
-        <div class="panel-toolbar"><h2>Productos</h2><select id="inventory-category"><option value="all">Todas las categorías</option></select></div>
+        <div class="panel-toolbar"><h2>Productos</h2><div class="inventory-filters"><select id="inventory-status" aria-label="Filtrar por estado"><option value="activo">Activos</option><option value="inactivo">Desactivados</option><option value="all">Todos</option></select><select id="inventory-category"><option value="all">Todas las categorías</option></select></div></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>PRODUCTO</th><th>ID DEL PRODUCTO</th><th>CATEGORÍA</th><th>PRECIO</th><th>EXISTENCIAS</th><th>ESTADO</th><th></th></tr></thead>
+            <thead><tr><th>PRODUCTO</th><th>ID DEL PRODUCTO</th><th>CATEGORÍA</th><th>PRECIO</th><th>EXISTENCIAS</th><th>NIVEL DE STOCK</th><th></th></tr></thead>
             <tbody id="inventory-body"></tbody>
           </table>
         </div>
@@ -109,34 +109,16 @@
     </section>
   
     <section id="historial" class="view">
-    <div class="title-row">
-      <div>
-        <h1>Historial de Ventas</h1>
-        <p class="muted">Consulta las transacciones registradas y su estado.</p>
+      <div class="title-row">
+        <div>
+          <h1>Historial de ventas</h1>
+          <p id="history-period" class="muted">Seleccione un día para consultar todos los turnos de la sucursal.</p>
+        </div>
+        <button id="history-date-picker" class="secondary history-date-picker" type="button" aria-haspopup="dialog">Seleccionar día</button>
       </div>
-    </div>
-    
-    <div class="panel">
-      <div class="table-wrap">
-        <table id="history-table">
-          <thead>
-            <tr>
-              <th>ID Venta</th>
-              <th>Turno</th>
-              <th>Fecha</th>
-              <th>Usuario</th>
-              <th>Tipo</th>
-              <th>Productos y Cantidades</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody id="history-list">
-            <!-- El contenido se inyectará dinámicamente con JavaScript -->
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
+      <div id="history-day-stats" class="stats history-day-stats"></div>
+      <div id="history-shifts" class="history-shifts"></div>
+    </section>
 
     <section id="configuracion" class="view">
       <div class="title-row"><div><p class="eyebrow">ADMINISTRACIÓN</p><h1>Configuración</h1><p class="muted">Usuarios, sucursales y catálogos del sistema.</p></div></div>
@@ -146,7 +128,7 @@
         <button class="secondary" type="button" data-settings-tab="catalogs">Catálogos</button>
       </div>
       <section class="panel settings-panel active" data-settings-panel="users">
-        <form id="user-form" class="settings-form">
+        <form id="user-form" class="settings-form" novalidate>
           <input id="user-id" type="hidden">
           <label>Nombre<input id="user-name" required maxlength="120"></label>
           <label>Usuario<input id="user-username" required maxlength="80"></label>
@@ -158,7 +140,7 @@
         <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th>USUARIO</th><th>ROL</th><th>ESTADO</th><th></th></tr></thead><tbody id="settings-users"></tbody></table></div>
       </section>
       <section class="panel settings-panel" data-settings-panel="branches" hidden>
-        <form id="branch-form" class="settings-form">
+        <form id="branch-form" class="settings-form" novalidate>
           <input id="branch-id" type="hidden">
           <label>Nombre<input id="branch-name" required maxlength="120"></label>
           <label>Código<input id="branch-code" required maxlength="30"></label>
@@ -169,8 +151,8 @@
         <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th>CÓDIGO</th><th>DIRECCIÓN</th><th>ESTADO</th><th></th></tr></thead><tbody id="settings-branches"></tbody></table></div>
       </section>
       <section class="panel settings-panel" data-settings-panel="catalogs" hidden>
-        <form id="catalog-form" class="settings-form compact">
-          <label>Catálogo<select id="catalog-type"><option value="categories">Categorías</option><option value="brands">Marcas</option><option value="units">Unidades</option></select></label>
+        <form id="catalog-form" class="settings-form compact" novalidate>
+          <label>Catálogo<select id="catalog-type"><option value="categories">Categorías</option><option value="brands">Marcas</option></select></label>
           <label>Nombre<input id="catalog-name" required maxlength="80"></label>
           <button class="primary" type="submit">Agregar</button>
         </form>
@@ -183,8 +165,8 @@
   
 
   <dialog id="product-dialog">
-    <form method="dialog">
-      <div class="dialog-head"><h2>Nuevo producto</h2><button>×</button></div>
+    <form method="dialog" novalidate>
+      <div class="dialog-head"><h2>Nuevo producto</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
       <div class="product-form-grid">
         <div class="field-group">
           <label for="new-category">Categoría</label>
@@ -203,15 +185,6 @@
           </div>
         </div>
         <label class="full-width">Nombre base<input id="new-name" required placeholder="Ej. Agua natural"></label>
-        <div class="field-group">
-          <label for="new-unit">Unidad de medida</label>
-          <div class="field-with-action"><select id="new-unit" required></select><button id="add-unit" class="icon-action" type="button" aria-label="Agregar nueva unidad de medida" title="Agregar nueva unidad de medida">＋</button></div>
-          <div id="new-unit-field" class="new-catalog-field" hidden>
-            <input id="new-unit-name" type="text" placeholder="Ej. caja, paquete, ml" maxlength="80">
-            <button id="confirm-unit" class="secondary" type="button">Agregar</button>
-          </div>
-        </div>
-        <label>Estado<select id="new-status" required></select></label>
         <label>Precio<input id="new-price" required type="number" min="0" step="0.01"></label>
         <label>Existencias<input id="new-stock" required type="number" min="0" step="1"></label>
         <label>Stock mínimo<input id="new-min-stock" required type="number" min="0" step="1"></label>
@@ -224,25 +197,49 @@
           </button>
         </div>
       </div>
-      <div class="dialog-actions"><button class="secondary" value="cancel">Cancelar</button><button class="primary" id="save-product" value="default">Guardar producto</button></div>
+      <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" id="save-product" type="button">Guardar producto</button></div>
     </form>
   </dialog>
   <dialog id="restock-dialog">
-    <form method="dialog">
-      <div class="dialog-head"><h2>Reponer existencias</h2><button value="cancel">×</button></div>
+    <form method="dialog" novalidate>
+      <div class="dialog-head"><h2>Reponer existencias</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
       <p class="muted">Producto: <strong id="restock-product-name"></strong></p>
       <label>Cantidad a agregar<input id="restock-quantity" required type="number" min="1" step="1" placeholder="Ej. 20"></label>
-      <div class="dialog-actions"><button class="secondary" value="cancel">Cancelar</button><button class="primary" id="save-restock" value="default">Agregar existencias</button></div>
+      <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" id="save-restock" type="button">Agregar existencias</button></div>
+    </form>
+  </dialog>
+  <dialog id="bulk-restock-dialog" class="bulk-restock-dialog" aria-labelledby="bulk-restock-title">
+    <form id="bulk-restock-form" novalidate>
+      <div class="dialog-head"><div><p class="eyebrow">REPOSICIÓN RÁPIDA</p><h2 id="bulk-restock-title">Reponer inventario</h2></div><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
+      <p class="muted">Indique cuántas unidades agregar de cada producto. Los valores empiezan en 0 y no cambian los que se dejen así.</p>
+      <div class="table-wrap bulk-restock-table-wrap">
+        <table>
+          <thead><tr><th>PRODUCTO</th><th>EXISTENCIAS</th><th>AGREGAR</th></tr></thead>
+          <tbody id="bulk-restock-list"></tbody>
+        </table>
+      </div>
+      <p id="bulk-restock-summary" class="muted">Aún no hay productos seleccionados.</p>
+      <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" id="save-bulk-restock" type="submit">Reponer seleccionados</button></div>
     </form>
   </dialog>
   <dialog id="color-palette-dialog" class="color-palette-dialog" aria-labelledby="color-palette-title">
-    <form method="dialog">
-      <div class="dialog-head"><div><p class="eyebrow">PALETA DE LA TARJETA</p><h2 id="color-palette-title">Elige un color</h2></div><button value="cancel" aria-label="Cerrar paleta">×</button></div>
+    <form method="dialog" novalidate>
+      <div class="dialog-head"><div><p class="eyebrow">PALETA DE LA TARJETA</p><h2 id="color-palette-title">Elige un color</h2></div><button type="button" data-dialog-close aria-label="Cerrar paleta">×</button></div>
       <div id="color-options" class="color-options" aria-label="40 opciones de color"></div>
       <p class="muted">El color identificará la tarjeta de este producto en el punto de venta.</p>
     </form>
   </dialog>
+  <dialog id="history-calendar-dialog" class="history-calendar-dialog" aria-labelledby="history-calendar-title">
+    <div class="history-calendar">
+      <div class="dialog-head"><div><p class="eyebrow">HISTORIAL DE VENTAS</p><h2 id="history-calendar-title">Elegir día</h2></div><button type="button" data-dialog-close aria-label="Cerrar calendario">×</button></div>
+      <p class="muted">Sólo se pueden seleccionar los días con ventas registradas.</p>
+      <div class="calendar-navigation"><button id="history-calendar-previous" class="secondary" type="button" aria-label="Mes anterior">‹</button><strong id="history-calendar-month"></strong><button id="history-calendar-next" class="secondary" type="button" aria-label="Mes siguiente">›</button></div>
+      <div class="calendar-weekdays" aria-hidden="true"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+      <div id="history-calendar-days" class="calendar-days" role="grid" aria-label="Días con ventas"></div>
+    </div>
+  </dialog>
   <div id="toast" role="status"></div>
+  <script src="src/excel.js"></script>
   <script src="src/api.js"></script>
   <script src="src/views/InventoryView.js"></script>
   <script src="src/views/SalesView.js"></script>

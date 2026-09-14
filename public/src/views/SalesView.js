@@ -80,7 +80,7 @@ class SalesView {
   }
 
   renderProductMenu() {
-    // La base de datos no permite vender productos inactivos o descontinuados.
+    // La base de datos no permite vender productos desactivados.
     const sellableProducts = this.products.filter((product) => !product.status || product.status === 'activo');
     const categories = [...new Set(sellableProducts.map((product) => product.category))];
     if (this.activeCategory !== 'all' && !categories.includes(this.activeCategory)) {
