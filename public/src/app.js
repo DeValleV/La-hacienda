@@ -31,6 +31,7 @@ class PointOfSaleApp {
       formatMoney,
       onDateChange: this.loadHistoryDate.bind(this),
       onMonthChange: this.loadHistoryMonth.bind(this),
+      onRefund: this.refundSale.bind(this),
     });
     this.settings = new SettingsView({
       api: this.api,
@@ -44,7 +45,6 @@ class PointOfSaleApp {
     this.bindLogin();
     document.getElementById('logout').onclick = () => this.logout();
     document.getElementById('export-inventory').onclick = () => this.exportInventory();
-    document.getElementById('export-sales').onclick = () => this.exportSales();
     this.renderAll();
     this.initialize();
   }
@@ -116,7 +116,12 @@ class PointOfSaleApp {
     this.history.reset();
     document.getElementById('login-screen').hidden = true;
     document.getElementById('app-shell').hidden = false;
-    document.getElementById('session-user').textContent = `${user.name} · ${user.role} · ${user.branchName}`;
+    const sessionUser = document.getElementById('session-user');
+    const name = document.createElement('strong');
+    name.textContent = user.name;
+    const details = document.createElement('span');
+    details.textContent = `${user.role} · ${user.branchName}`;
+    sessionUser.replaceChildren(name, details, document.getElementById('logout'));
     this.applyPermissions();
     try {
       const [{ shift }, catalogs] = await Promise.all([
@@ -160,7 +165,7 @@ class PointOfSaleApp {
     this.shiftSummary.setShift(null);
     this.sales.setShiftOpen(false);
     this.sales.clearCart();
-    document.getElementById('session-user').textContent = '';
+    document.getElementById('session-user').replaceChildren(document.getElementById('logout'));
     products.splice(0);
     salesHistory.splice(0);
     this.history.reset();
@@ -219,12 +224,18 @@ class PointOfSaleApp {
     await Promise.all([this.refreshData(), this.loadHistory(true)]);
   }
 
+  async refundSale(saleId) {
+    await this.api.refundSale(saleId);
+    await Promise.all([this.refreshData(), this.loadHistory(true)]);
+    this.showToast('Reembolso registrado e inventario actualizado.');
+  }
+
   async toggleShift() {
     const button = document.getElementById('close-shift');
     button.disabled = true;
     try {
       if (this.currentShift?.status === 'abierto') {
-        if (!window.confirm('¿Desea finalizar el turno actual?')) return;
+        if (!(await this.confirmCloseShift())) return;
         this.currentShift = (await this.api.closeShift()).shift;
         this.sales.clearCart();
       } else {
@@ -242,13 +253,19 @@ class PointOfSaleApp {
     }
   }
 
+  confirmCloseShift() {
+    const dialog = document.getElementById('close-shift-dialog');
+    dialog.showModal();
+    return new Promise((resolve) => {
+      dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true });
+    });
+  }
+
   syncShiftUi() {
     const isOpen = this.currentShift?.status === 'abierto';
     this.sales.setShiftOpen(isOpen);
     if (this.currentSession) {
-      document.querySelector('#sales-header h1').textContent = isOpen
-        ? `Turno activo · ${this.currentSession.branchName}`
-        : `Sin turno abierto · ${this.currentSession.branchName}`;
+      document.querySelector('#sales-header h1').textContent = this.currentSession.branchName;
     }
   }
 
@@ -321,24 +338,13 @@ class PointOfSaleApp {
         ['ID', 'Producto', 'Categoría', 'Marca', 'Precio', 'Existencias', 'Stock mínimo', 'Estado'],
         ...products.map((product) => [product.id, product.name, product.category, product.brand, product.price, product.stock, product.minStock, product.status]),
       ],
+      rowStyles: [null, ...products.map((product) => {
+        if (product.stock === 0) return 'danger';
+        if (product.stock <= product.minStock) return 'warning';
+        return 'success';
+      })],
     }]);
     this.showToast('Se descargó el inventario en formato Excel.');
-  }
-
-  exportSales() {
-    const shiftSales = salesHistory.filter((sale) => sale.turnId === this.currentShift?.id);
-    window.downloadXlsx('ventas-turno.xlsx', [{
-      name: 'Ventas del turno',
-      columns: [
-        { width: 20 }, { width: 23 }, { width: 26 }, { width: 15 }, { width: 32 },
-        { width: 12 }, { width: 16, type: 'currency' }, { width: 16, type: 'currency' },
-      ],
-      rows: [
-        ['ID venta', 'Fecha', 'Usuario', 'Tipo', 'Producto', 'Cantidad', 'Precio unitario', 'Total venta'],
-        ...shiftSales.flatMap((sale) => sale.lines.map((line) => [sale.id, sale.date, sale.userName, sale.tipoVenta, line.productName, line.qty, line.price, sale.total])),
-      ],
-    }]);
-    this.showToast('Se descargó el reporte del turno en formato Excel.');
   }
 
   bindDialogs() {
@@ -349,6 +355,9 @@ class PointOfSaleApp {
       dialog.querySelectorAll('[data-dialog-close]').forEach((button) => {
         button.addEventListener('click', () => dialog.close('cancel'));
       });
+    });
+    document.getElementById('confirm-close-shift').addEventListener('click', () => {
+      document.getElementById('close-shift-dialog').close('confirm');
     });
   }
 

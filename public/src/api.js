@@ -57,6 +57,7 @@ class ApiClient {
   deactivateProduct(id) { return this.request(`/api/products/${id}/deactivate`, { method: 'POST', body: '{}' }); }
   activateProduct(id) { return this.request(`/api/products/${id}/activate`, { method: 'POST', body: '{}' }); }
   createSale(sale) { return this.request('/api/sales', { method: 'POST', body: JSON.stringify(sale) }); }
+  refundSale(id) { return this.request(`/api/sales/${id}/refund`, { method: 'POST', body: '{}' }); }
   getSales({ month = '', date = '' } = {}) {
     const search = month ? `month=${encodeURIComponent(month)}` : date ? `date=${encodeURIComponent(date)}` : '';
     return this.request(search ? `/api/sales?${search}` : '/api/sales');

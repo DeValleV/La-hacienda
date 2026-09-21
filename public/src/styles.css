@@ -135,9 +135,9 @@ header {
   display: flex;
   flex: 1;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
 }
+
+.sales-title-row { display: flex; align-items: center; gap: 12px; }
 
 .sales-header h1 {
   margin: 2px 0 0;
@@ -979,10 +979,31 @@ dialog {
 
 .history-date-picker {
   min-width: 225px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-color: color-mix(in srgb, var(--blue) 42%, var(--line));
+  background: var(--soft);
+  color: var(--blue);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--blue) 15%, transparent);
+}
+
+.history-date-picker:hover {
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 13%, #fff);
+}
+
+.history-date-picker svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
 }
 
 .history-day-stats {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .history-shifts {
@@ -997,6 +1018,24 @@ dialog {
 .history-shift {
   overflow: hidden;
 }
+.history-shift.active-shift { border: 2px solid var(--green); box-shadow: 0 0 0 3px rgba(22,121,75,.10); }
+.history-shift.active-shift summary { background: #f0faf4; }
+.history-shift.active-shift summary > div:first-child strong::after { content: 'ACTIVO'; margin-left: 9px; padding: 3px 7px; border-radius: 99px; background: #dff3e6; color: var(--green); font-size: 10px; }
+.sale-total { text-align: right; white-space: nowrap; }
+.sale-refund { width: 125px; text-align: right; white-space: nowrap; }
+.refund-action { display: inline-flex; margin-top: 8px; padding: 6px 10px; border-radius: 5px; background: #fff0ed; color: #b3261e; font-size: 12px; font-weight: 800; }
+.refund-action:hover { background: #fbd8d3; }
+.refunded-label { color: #b3261e; font-size: 12px; font-weight: 800; }
+.history-shift table { table-layout: fixed; }
+.history-shift th:nth-child(1) { width: 15%; }
+.history-shift th:nth-child(2) { width: 15%; }
+.history-shift th:nth-child(3) { width: 15%; }
+.history-shift th:nth-child(4) { width: 30%; }
+.history-shift th:nth-child(5) { width: 12%; }
+.history-shift th:nth-child(6) { width: 13%; }
+.sale-refunded td { background: #fff2f0 !important; color: #9f3028; text-decoration: line-through; }
+.sale-refunded .sale-type, .sale-refunded .refunded-label { text-decoration: none; }
+.sale-refunded .refunded-label { color: #b3261e; }
 
 .history-shift summary {
   display: flex;
@@ -1015,11 +1054,26 @@ dialog {
 .history-shift summary::after {
   content: '⌄';
   color: var(--blue);
-  font-size: 20px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--line));
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1;
+  transition: transform .18s ease, background .18s ease;
 }
 
 .history-shift:not([open]) summary::after {
   transform: rotate(-90deg);
+}
+
+.history-shift summary:hover::after {
+  background: color-mix(in srgb, var(--blue) 18%, #fff);
 }
 
 .history-shift summary > div:first-child {
@@ -1030,9 +1084,13 @@ dialog {
 .shift-quick-stats {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 16px;
   color: var(--muted);
 }
+
+.active-shift .shift-quick-stats span:not(:first-child) { font-size: 12px; }
 
 .shift-quick-stats strong {
   color: #263033;
@@ -1215,6 +1273,15 @@ dialog {
   }
 }
 
+/* Resumen compacto de totales por tipo de venta. */
+.shift-quick-stats { gap: 8px; }
+.shift-sales-count { margin-right: 5px; font-size: 13px; }
+.shift-type-total, .shift-grand-total { display: grid; gap: 2px; min-width: 82px; padding: 7px 9px; border: 1px solid #e8ded4; border-radius: 6px; background: #fffdfb; }
+.shift-type-total small, .shift-grand-total small { color: var(--muted); font-size: 10px; font-weight: 700; }
+.shift-type-total strong, .shift-grand-total strong { font-size: 13px; }
+.shift-grand-total { border-color: #d3eadc; background: #f0faf4; }
+.history-shift th:nth-child(5) { text-align: right; }
+
 /* =========================================
    13. REFRESCO VISUAL: PALETA Y SUPERFICIES
    ========================================= */
@@ -1341,6 +1408,46 @@ label input {
   transform: translateY(-1px);
 }
 
+/* El color comunica la acción disponible: abrir (verde) o cerrar (rojo). */
+#close-shift.shift-action-start {
+  background: var(--green);
+  box-shadow: 0 7px 15px rgba(39, 118, 91, .24);
+}
+
+#close-shift.shift-action-start:hover {
+  background: #1f6149;
+  box-shadow: 0 10px 20px rgba(39, 118, 91, .30);
+}
+
+#close-shift.shift-action-close,
+#confirm-close-shift {
+  background: #b3261e;
+  box-shadow: 0 7px 15px rgba(189, 61, 50, .24);
+}
+
+#close-shift.shift-action-close:hover,
+#confirm-close-shift:hover {
+  background: #8e1d18;
+  box-shadow: 0 10px 20px rgba(189, 61, 50, .30);
+}
+
+.shift-status.low {
+  background: #fff0ed;
+  color: var(--danger);
+}
+
+.close-shift-dialog {
+  width: min(460px, calc(100% - 32px));
+}
+
+.close-shift-dialog form {
+  gap: 18px;
+}
+
+.close-shift-dialog .dialog-actions {
+  margin-top: 4px;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
@@ -1416,8 +1523,21 @@ dialog::backdrop {
 .login-submit { width: 100%; padding: 12px; }
 .login-error { margin: 0; color: var(--danger); font-weight: 700; }
 .login-help { margin: 0; font-size: 12px; }
-.logout-button { margin-top: 8px; padding: 10px 12px; text-align: left; color: var(--danger); font-weight: 700; }
-.session-user { margin-top: auto; padding: 12px; color: var(--muted); font-size: 12px; line-height: 1.5; border-top: 1px solid var(--line); }
+.logout-button { width: 100%; margin-top: 8px; padding: 9px 10px; text-align: left; border-top: 1px solid #ead8d1; color: var(--danger); font-weight: 700; }
+.session-user {
+  display: grid;
+  gap: 4px;
+  margin-top: auto;
+  padding: 14px 12px;
+  border: 1px solid #e3d9cf;
+  border-radius: 8px;
+  background: #fffaf6;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.session-user strong { color: var(--navy); font-size: 13px; }
+.session-user span { text-transform: capitalize; }
 .sidebar-bottom { margin-top: 0; }
 .app-loading { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(255,255,255,.72); color: var(--navy); font-weight: 800; backdrop-filter: blur(2px); }
 .app-loading[hidden] { display: none; }
@@ -1435,6 +1555,7 @@ dialog::backdrop {
 button:disabled { cursor: not-allowed; opacity: .55; }
 .product-card[data-add] { cursor: pointer; }
 .product-card[aria-disabled="true"] { cursor: not-allowed; opacity: .55; }
+.product-card.is-out-of-stock { filter: grayscale(.8); opacity: .42; }
 
 @media (max-width: 700px) {
   .settings-form, .settings-form.compact { grid-template-columns: 1fr; }

@@ -41,6 +41,7 @@ test('la exportación genera un libro XLSX descargable', () => {
     name: 'Inventario',
     columns: [{ width: 30 }, { width: 14, type: 'currency' }],
     rows: [['Producto', 'Precio'], ['Agua', 12.5]],
+    rowStyles: [null, 'success'],
   }]);
 
   assert.equal(downloadedFile, 'inventario.xlsx');
@@ -50,4 +51,6 @@ test('la exportación genera un libro XLSX descargable', () => {
   assert.match(generatedBlob.bytes.toString('utf8'), /xl\/styles\.xml/);
   assert.match(generatedBlob.bytes.toString('utf8'), /width="30"/);
   assert.match(generatedBlob.bytes.toString('utf8'), /<t xml:space="preserve">Agua<\/t>/);
+  assert.match(generatedBlob.bytes.toString('utf8'), /FFE8F5ED/);
+  assert.match(generatedBlob.bytes.toString('utf8'), /r="B2" s="8"/);
 });

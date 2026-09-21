@@ -231,7 +231,14 @@ function randomSaleId() {
 
 async function currentShift(env, session) {
   const shift = await env.DB.prepare(`
-    SELECT t.id, t.fecha_apertura AS openedAt, t.estado AS status, u.nombre AS openedBy
+    SELECT t.id, t.fecha_apertura AS openedAt, t.estado AS status, u.nombre AS openedBy,
+           1 + (
+             SELECT COUNT(*) FROM turno earlier
+             WHERE earlier.sucursal_id = t.sucursal_id
+               AND date(earlier.fecha_apertura, '-6 hours') = date(t.fecha_apertura, '-6 hours')
+               AND (earlier.fecha_apertura < t.fecha_apertura
+                 OR (earlier.fecha_apertura = t.fecha_apertura AND earlier.id < t.id))
+           ) AS dailyNumber
     FROM turno t JOIN usuario u ON u.id = t.abierto_por_usuario_id
     WHERE t.sucursal_id = ? AND t.estado = 'abierto'
     ORDER BY t.fecha_apertura DESC LIMIT 1
@@ -256,7 +263,14 @@ async function closeShift(env, session) {
   if (!result.meta.changes) throw new ApiError(409, 'No hay un turno abierto.', 'NO_OPEN_SHIFT');
   const shift = await env.DB.prepare(`
     SELECT t.id, t.fecha_apertura AS openedAt, t.fecha_cierre AS closedAt, t.estado AS status,
-           opener.nombre AS openedBy, closer.nombre AS closedBy
+           opener.nombre AS openedBy, closer.nombre AS closedBy,
+           1 + (
+             SELECT COUNT(*) FROM turno earlier
+             WHERE earlier.sucursal_id = t.sucursal_id
+               AND date(earlier.fecha_apertura, '-6 hours') = date(t.fecha_apertura, '-6 hours')
+               AND (earlier.fecha_apertura < t.fecha_apertura
+                 OR (earlier.fecha_apertura = t.fecha_apertura AND earlier.id < t.id))
+           ) AS dailyNumber
     FROM turno t
     JOIN usuario opener ON opener.id = t.abierto_por_usuario_id
     LEFT JOIN usuario closer ON closer.id = t.cerrado_por_usuario_id
@@ -314,17 +328,36 @@ async function loadSale(db, session, saleId) {
   `).bind(saleId, session.branchId).first();
   if (!sale) throw new ApiError(404, 'Venta no encontrada.', 'NOT_FOUND');
   const details = await db.prepare(`
-    SELECT producto_id AS productId, nombre_producto AS productName, cantidad AS qty,
-           precio_unitario_centavos AS priceCents
-    FROM detalle_venta WHERE venta_id = ? ORDER BY producto_id
+    SELECT d.producto_id AS productId, d.nombre_producto AS productName, d.cantidad AS qty,
+           d.precio_unitario_centavos AS priceCents,
+           COALESCE((SELECT SUM(dr.cantidad) FROM detalle_reembolso dr JOIN reembolso r ON r.id = dr.reembolso_id WHERE r.venta_id = d.venta_id AND dr.producto_id = d.producto_id), 0) AS refundedQty
+    FROM detalle_venta d WHERE venta_id = ? ORDER BY producto_id
   `).bind(saleId).all();
   return {
     id: sale.id, turnId: sale.turnId, tipoVenta: sale.tipoVenta.toUpperCase(), date: sale.date,
     total: sale.totalCents / 100, status: sale.status, userName: sale.userName,
     lines: details.results.map((line) => ({
-      productId: line.productId, productName: line.productName, qty: line.qty, price: line.priceCents / 100,
+      productId: line.productId, productName: line.productName, qty: line.qty, refundedQty: line.refundedQty, price: line.priceCents / 100,
     })),
   };
+}
+
+async function refundSale(request, env, session, saleId) {
+  requireSession(session, PRODUCT_ROLES);
+  await bodyJson(request);
+  const sale = await env.DB.prepare(`SELECT v.id FROM venta v JOIN turno t ON t.id = v.turno_id WHERE v.id = ? AND v.sucursal_id = ? AND t.estado = 'abierto'`).bind(saleId, session.branchId).first();
+  if (!sale) throw new ApiError(409, 'Sólo puede reembolsar ventas del turno activo.', 'CONFLICT');
+  const alreadyRefunded = await env.DB.prepare('SELECT id FROM reembolso WHERE venta_id = ? LIMIT 1').bind(saleId).first();
+  if (alreadyRefunded) throw new ApiError(409, 'Esta venta ya fue reembolsada.', 'CONFLICT');
+  const saleLines = await env.DB.prepare('SELECT producto_id AS productId, cantidad AS qty FROM detalle_venta WHERE venta_id = ?').bind(saleId).all();
+  const refundId = crypto.getRandomValues(new Uint32Array(1))[0] || 1;
+  const statements = [env.DB.prepare('INSERT INTO reembolso (id, venta_id, usuario_id) VALUES (?, ?, ?)').bind(refundId, saleId, session.userId)];
+  for (const line of saleLines.results) {
+    statements.push(env.DB.prepare('INSERT INTO detalle_reembolso (reembolso_id, producto_id, cantidad) VALUES (?, ?, ?)').bind(refundId, line.productId, line.qty));
+    statements.push(env.DB.prepare('UPDATE producto SET stock = stock + ? WHERE id = ? AND sucursal_id = ?').bind(line.qty, line.productId, session.branchId));
+  }
+  await env.DB.batch(statements);
+  return json({ sale: await loadSale(env.DB, session, saleId) });
 }
 
 async function listSales(request, env, session) {
@@ -353,7 +386,14 @@ async function listSales(request, env, session) {
   if (date) {
     const shiftStatement = env.DB.prepare(`
       SELECT t.id, t.fecha_apertura AS openedAt, t.fecha_cierre AS closedAt, t.estado AS status,
-             opener.nombre AS openedBy, closer.nombre AS closedBy
+             opener.nombre AS openedBy, closer.nombre AS closedBy,
+             1 + (
+               SELECT COUNT(*) FROM turno earlier
+               WHERE earlier.sucursal_id = t.sucursal_id
+                 AND date(earlier.fecha_apertura, '-6 hours') = date(t.fecha_apertura, '-6 hours')
+                 AND (earlier.fecha_apertura < t.fecha_apertura
+                   OR (earlier.fecha_apertura = t.fecha_apertura AND earlier.id < t.id))
+             ) AS dailyNumber
       FROM turno t JOIN usuario opener ON opener.id = t.abierto_por_usuario_id
       LEFT JOIN usuario closer ON closer.id = t.cerrado_por_usuario_id
       WHERE t.sucursal_id = ? AND (
@@ -551,6 +591,8 @@ async function handleApi(request, env) {
   if (method === 'GET' && pathname === '/api/products') return listProducts(env, session);
   if (method === 'POST' && pathname === '/api/products') return createProduct(request, env, session);
   if (method === 'POST' && pathname === '/api/sales') return createSale(request, env, session);
+  const refundMatch = pathname.match(/^\/api\/sales\/(\d+)\/refund$/);
+  if (refundMatch && method === 'POST') return refundSale(request, env, session, Number(refundMatch[1]));
   if (method === 'GET' && pathname === '/api/sales/months') return listSaleMonths(env, session);
   if (method === 'GET' && pathname === '/api/sales/days') return listSaleDays(request, env, session);
   if (method === 'GET' && pathname === '/api/sales') return listSales(request, env, session);

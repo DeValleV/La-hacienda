@@ -45,7 +45,6 @@ class ShiftSummaryView {
   render() {
     const salesByType = this.getSalesByType();
     const totalSales = salesByType.reduce((sum, type) => sum + type.total, 0);
-    const totalPortions = salesByType.reduce((sum, type) => sum + type.portions, 0);
     const lowStockCount = this.products.filter(
       (product) => product.status === 'activo' && product.stock <= product.minStock,
     ).length;
@@ -60,20 +59,21 @@ class ShiftSummaryView {
     document.getElementById('summary-personal').textContent = this.formatMoney(
       salesByType.find((type) => type.value === 'PERSONAL').total,
     );
-    document.getElementById('summary-portions').textContent = totalPortions;
     document.getElementById('summary-stock').textContent = `${lowStockCount} alerta${lowStockCount === 1 ? '' : 's'}`;
 
     document.getElementById('sales-report').innerHTML = this.renderSalesReport(salesByType);
     const button = document.getElementById('close-shift');
     const isOpen = this.shift?.status === 'abierto';
     button.textContent = isOpen ? '✓ Finalizar turno' : '＋ Iniciar turno';
+    button.classList.toggle('shift-action-start', !isOpen);
+    button.classList.toggle('shift-action-close', isOpen);
     const period = document.getElementById('shift-period');
     if (!this.shift) {
       period.textContent = 'No hay un turno abierto.';
     } else if (isOpen) {
-      period.textContent = `Turno #${this.shift.id} · abierto ${this.formatDate(this.shift.openedAt)} por ${this.shift.openedBy}`;
+      period.textContent = `Turno #${this.shift.dailyNumber} · abierto ${this.formatDate(this.shift.openedAt)} por ${this.shift.openedBy}`;
     } else {
-      period.textContent = `Turno #${this.shift.id} · cerrado ${this.formatDate(this.shift.closedAt)} por ${this.shift.closedBy} · abrió ${this.shift.openedBy}`;
+      period.textContent = `Turno #${this.shift.dailyNumber} · cerrado ${this.formatDate(this.shift.closedAt)} por ${this.shift.closedBy} · abrió ${this.shift.openedBy}`;
     }
     const status = document.querySelector('.shift-status');
     status.textContent = isOpen ? '● Caja abierta' : '● Caja cerrada';
@@ -108,7 +108,7 @@ class ShiftSummaryView {
           <strong>${escapeHtml(product.productName)}</strong>
           <div class="bar"><span style="width:${(product.qty / maxQuantity) * 100}%"></span></div>
         </div>
-        <span>${product.qty} porciones</span>
+        <span>${product.qty} unidades</span>
         <strong>${this.formatMoney(product.price * product.qty)}</strong>
       </div>`).join('');
   }

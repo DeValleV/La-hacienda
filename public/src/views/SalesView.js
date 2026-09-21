@@ -93,14 +93,20 @@ class SalesView {
     ].map(([category, label]) => `
       <button type="button" class="category-filter${this.activeCategory === category ? ' active' : ''}" data-category="${escapeHtml(category)}" role="tab" aria-selected="${this.activeCategory === category}">${escapeHtml(label)}</button>`).join('');
 
-    const createProductCard = (product) => `
-      <article class="product-card"${this.isShiftOpen ? ` data-add="${product.id}"` : ''} aria-disabled="${!this.isShiftOpen}" style="--product-color: ${product.color || '#ff6600'};">
+    const createProductCard = (product) => {
+      const reserved = this.cart.find((line) => line.id === product.id)?.qty || 0;
+      const availableStock = Math.max(0, product.stock - reserved);
+      const isOutOfStock = availableStock <= 0;
+      const canAdd = this.isShiftOpen && !isOutOfStock;
+      return `
+      <article class="product-card${isOutOfStock ? ' is-out-of-stock' : ''}"${canAdd ? ` data-add="${product.id}"` : ''} aria-disabled="${!canAdd}" style="--product-color: ${product.color || '#ff6600'};">
         <h3>${escapeHtml(product.name)}</h3>
         <footer>
-          <small>ID ${product.id} · ${product.stock} disponibles</small>
+          <small>${availableStock} disponibles</small>
           <strong>${this.formatMoney(product.price)}</strong>
         </footer>
       </article>`;
+    };
 
     const menu = document.getElementById('product-grid');
     if (this.activeCategory === 'all') {
@@ -205,6 +211,7 @@ class SalesView {
 
     if (line) line.qty += 1;
     else this.cart.push({ id: product.id, qty: 1 });
+    this.renderProductMenu();
     this.renderOrder();
   }
 
@@ -214,6 +221,7 @@ class SalesView {
     const product = this.getProduct(productId);
     line.qty = Math.min(line.qty + Number(delta), product.stock);
     if (line.qty < 1) this.cart = this.cart.filter((item) => item !== line);
+    this.renderProductMenu();
     this.renderOrder();
   }
 
@@ -226,17 +234,20 @@ class SalesView {
       return;
     }
     line.qty = Math.min(parsedQuantity, product.stock);
+    this.renderProductMenu();
     this.renderOrder();
   }
 
   removeFromCart(productId) {
     this.cart = this.cart.filter((item) => item.id !== Number(productId));
+    this.renderProductMenu();
     this.renderOrder();
   }
 
   clearCart() {
     this.cart = [];
     this.paymentWasEdited = false;
+    this.renderProductMenu();
     this.renderOrder();
   }
 

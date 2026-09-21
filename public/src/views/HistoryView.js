@@ -1,8 +1,9 @@
 class HistoryView {
-  constructor({ formatMoney, onDateChange, onMonthChange }) {
+  constructor({ formatMoney, onDateChange, onMonthChange, onRefund }) {
     this.formatMoney = formatMoney;
     this.onDateChange = onDateChange;
     this.onMonthChange = onMonthChange;
+    this.onRefund = onRefund;
     this.months = [];
     this.daysByMonth = new Map();
     this.calendarMonth = null;
@@ -20,6 +21,11 @@ class HistoryView {
       const button = event.target.closest('[data-history-date]');
       if (button && !button.disabled) this.selectDate(button.dataset.historyDate);
     });
+    document.getElementById('history-shifts').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-refund-sale]');
+      if (button) this.openRefund(Number(button.dataset.refundSale));
+    });
+    document.getElementById('refund-submit').onclick = () => this.submitRefund();
   }
 
   setMonths(months) {
@@ -142,16 +148,15 @@ class HistoryView {
   }
 
   render() {
-    const picker = document.getElementById('history-date-picker');
     const period = document.getElementById('history-period');
     if (!this.selectedDate) {
-      picker.textContent = 'Seleccionar día';
+      document.getElementById('history-date-label').textContent = 'Seleccionar día';
       period.textContent = 'Seleccione un día para consultar todos los turnos de la sucursal.';
       this.renderStats([]);
       document.getElementById('history-shifts').innerHTML = '<div class="panel history-empty muted">No hay un día seleccionado.</div>';
       return;
     }
-    picker.textContent = this.formatDay(this.selectedDate);
+    document.getElementById('history-date-label').textContent = this.formatDay(this.selectedDate);
     period.textContent = `Todos los turnos registrados el ${this.formatDay(this.selectedDate)} en esta sucursal.`;
     this.renderStats(this.daySales);
     this.renderShifts();
@@ -159,13 +164,15 @@ class HistoryView {
 
   renderStats(sales) {
     const total = sales.reduce((sum, sale) => sum + sale.total, 0);
-    const portions = sales.reduce((sum, sale) => sum + sale.lines.reduce((lineSum, line) => lineSum + line.qty, 0), 0);
     const shifts = this.dayShifts.length || new Set(sales.map((sale) => sale.turnId)).size;
+    const byType = Object.fromEntries(['COMEDOR', 'FACTURADA', 'PERSONAL'].map((type) => [type, sales.filter((sale) => sale.tipoVenta === type).reduce((sum, sale) => sum + sale.total, 0)]));
     document.getElementById('history-day-stats').innerHTML = `
       <article><span>Total del día</span><strong>${this.formatMoney(total)}</strong><small>${sales.length} venta${sales.length === 1 ? '' : 's'} registradas</small></article>
       <article><span>Turnos</span><strong>${shifts}</strong><small>Turnos con ventas</small></article>
-      <article><span>Porciones vendidas</span><strong>${portions}</strong><small>Productos cobrados</small></article>
-      <article><span>Promedio por venta</span><strong>${sales.length ? this.formatMoney(total / sales.length) : this.formatMoney(0)}</strong><small>Importe promedio</small></article>`;
+      <article><span>Promedio por venta</span><strong>${sales.length ? this.formatMoney(total / sales.length) : this.formatMoney(0)}</strong><small>Importe promedio</small></article>
+      <article><span>Comedor</span><strong>${this.formatMoney(byType.COMEDOR)}</strong><small>Total del día</small></article>
+      <article><span>Facturada</span><strong>${this.formatMoney(byType.FACTURADA)}</strong><small>Total del día</small></article>
+      <article><span>Personal</span><strong>${this.formatMoney(byType.PERSONAL)}</strong><small>Total del día</small></article>`;
   }
 
   renderShifts() {
@@ -179,19 +186,32 @@ class HistoryView {
       if (!groups.has(sale.turnId)) groups.set(sale.turnId, { shift: { id: sale.turnId, openedAt: sale.date, closedAt: null, status: 'cerrado' }, sales: [] });
       groups.get(sale.turnId).sales.push(sale);
     });
-    container.innerHTML = [...groups.entries()].sort(([, first], [, second]) => new Date(first.shift.openedAt) - new Date(second.shift.openedAt)).map(([turnId, group]) => {
+    container.innerHTML = [...groups.entries()].sort(([, first], [, second]) => new Date(second.shift.openedAt) - new Date(first.shift.openedAt)).map(([turnId, group]) => {
       const { shift, sales } = group;
+      const newestSalesFirst = [...sales].sort((first, second) => new Date(second.date) - new Date(first.date) || second.id - first.id);
       const total = sales.reduce((sum, sale) => sum + sale.total, 0);
-      const portions = sales.reduce((sum, sale) => sum + sale.lines.reduce((lineSum, line) => lineSum + line.qty, 0), 0);
+      const typeTotals = Object.fromEntries(['COMEDOR', 'FACTURADA', 'PERSONAL'].map((type) => [type, sales.filter((sale) => sale.tipoVenta === type).reduce((sum, sale) => sum + sale.total, 0)]));
       const firstTime = this.formatTime(shift.openedAt);
       const lastTime = shift.closedAt ? this.formatTime(shift.closedAt) : 'abierto';
-      return `<details class="panel history-shift" open>
-        <summary><div><strong>Turno #${turnId}</strong><span class="muted">De ${firstTime} a ${lastTime}</span></div><div class="shift-quick-stats"><span>${sales.length} ventas</span><span>${portions} porciones</span><strong>${this.formatMoney(total)}</strong></div></summary>
-        <div class="table-wrap"><table><thead><tr><th>HORA</th><th>USUARIO</th><th>TIPO</th><th>PRODUCTOS Y CANTIDADES</th><th>TOTAL</th></tr></thead><tbody>
-          ${sales.length ? sales.map((sale) => `<tr><td>${escapeHtml(this.formatTime(sale.date))}</td><td>${escapeHtml(sale.userName)}</td><td><span class="sale-type sale-type-${sale.tipoVenta.toLowerCase()}">${escapeHtml(this.getSaleTypeLabel(sale.tipoVenta))}</span></td><td><div class="history-lines">${sale.lines.map((line) => `<div><span>${escapeHtml(line.productName)}</span><span class="muted">× ${line.qty}</span></div>`).join('')}</div></td><td><strong>${this.formatMoney(sale.total)}</strong></td></tr>`).join('') : '<tr><td colspan="5" class="muted">Este turno no registró ventas.</td></tr>'}
+      const active = shift.status === 'abierto';
+      return `<details class="panel history-shift${active ? ' active-shift' : ''}" open>
+        <summary><div><strong>Turno #${shift.dailyNumber ?? turnId}</strong><span class="muted">De ${firstTime} a ${lastTime}</span></div><div class="shift-quick-stats"><span class="shift-sales-count">${sales.length} ventas</span><span class="shift-type-total"><small>Comedor</small><strong>${this.formatMoney(typeTotals.COMEDOR)}</strong></span><span class="shift-type-total"><small>Facturada</small><strong>${this.formatMoney(typeTotals.FACTURADA)}</strong></span><span class="shift-type-total"><small>Personal</small><strong>${this.formatMoney(typeTotals.PERSONAL)}</strong></span><span class="shift-grand-total"><small>Total</small><strong>${this.formatMoney(total)}</strong></span></div></summary>
+        <div class="table-wrap"><table><thead><tr><th>HORA</th><th>USUARIO</th><th>TIPO</th><th>PRODUCTOS Y CANTIDADES</th><th>TOTAL</th><th aria-label="Reembolso"></th></tr></thead><tbody>
+          ${sales.length ? newestSalesFirst.map((sale) => { const refunded = sale.lines.every((line) => line.qty === (line.refundedQty || 0)); return `<tr class="${refunded ? 'sale-refunded' : ''}"><td>${escapeHtml(this.formatTime(sale.date))}</td><td>${escapeHtml(sale.userName)}</td><td><span class="sale-type sale-type-${sale.tipoVenta.toLowerCase()}">${escapeHtml(this.getSaleTypeLabel(sale.tipoVenta))}</span></td><td><div class="history-lines">${sale.lines.map((line) => `<div><span>${escapeHtml(line.productName)}</span><span class="muted">× ${line.qty}</span></div>`).join('')}</div></td><td class="sale-total"><strong>${this.formatMoney(sale.total)}</strong></td><td class="sale-refund">${refunded ? '<span class="refunded-label">Reembolsado</span>' : active ? `<button class="refund-action" data-refund-sale="${sale.id}">Reembolsar</button>` : ''}</td></tr>`; }).join('') : '<tr><td colspan="6" class="muted">Este turno no registró ventas.</td></tr>'}
         </tbody></table></div>
       </details>`;
     }).join('');
+  }
+
+  openRefund(saleId) {
+    this.refundSale = this.daySales.find((sale) => sale.id === saleId);
+    if (!this.refundSale) return;
+    document.getElementById('refund-dialog').showModal();
+  }
+
+  async submitRefund() {
+    const button = document.getElementById('refund-submit'); button.disabled = true;
+    try { await this.onRefund(this.refundSale.id); document.getElementById('refund-dialog').close(); } finally { button.disabled = false; }
   }
 
   getSaleTypeLabel(type) {
