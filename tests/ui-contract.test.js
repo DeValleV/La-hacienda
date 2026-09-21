@@ -34,7 +34,7 @@ test('el historial se presenta sin controles de edición', () => {
 test('el calendario del historial sólo ofrece días registrados y agrupa por turno', () => {
   assert.match(html, /id="history-calendar-dialog"/);
   assert.match(scripts, /button\.disabled = !availableDates\.has\(date\)/);
-  assert.match(scripts, /<details class="panel history-shift" open>/);
+  assert.match(scripts, /<details class="panel history-shift\$\{active \? ' active-shift' : ''\}" open>/);
 });
 
 test('los diálogos pueden cerrarse sin enviar formularios y la reposición rápida existe', () => {

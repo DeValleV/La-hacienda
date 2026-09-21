@@ -55,7 +55,7 @@ Las reglas del modelo están explicadas en [database-schema.md](database-schema.
 | `wrangler.toml` | Nombres de Workers, assets y bindings D1 por entorno. |
 | `.dev.vars` | Secreto local. No existe en Git y no se debe subir. |
 
-La migración ya contiene dos sucursales semilla: `Sucursal Centro` y `Sucursal Norte`; no contiene usuarios ni contraseñas. También añade cinco productos de ejemplo repartidos entre ambas sucursales. En producción se pueden editar o desactivar desde Inventario; no se deben borrar físicamente.
+La migración de producción crea únicamente la sucursal `Ikano` y las categorías `Alimentos`, `Bebidas`, `Postres` y `Botanas`. No contiene usuarios, contraseñas ni productos; el administrador inicial se crea mediante el flujo de inicialización.
 
 ## 3. Requisitos compartidos
 

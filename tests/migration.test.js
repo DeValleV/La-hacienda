@@ -13,10 +13,16 @@ function createDatabase() {
   const database = new DatabaseSync(':memory:');
   migrations.forEach((migration) => database.exec(migration));
   database.exec(`
+    INSERT INTO sucursal (nombre, codigo) VALUES ('Pruebas Norte', 'TEST-NORTE');
     INSERT INTO usuario (rol_id, sucursal_id, nombre, nombre_usuario, password_hash)
     VALUES
       (1, 1, 'Admin Centro', 'admin.centro', 'hash-de-prueba'),
       (1, 2, 'Admin Norte', 'admin.norte', 'hash-de-prueba');
+    INSERT INTO marca (nombre) VALUES ('Marca de prueba');
+    INSERT INTO producto (sucursal_id, categoria_id, marca_id, estado_id, nombre_base, precio_centavos, stock, stock_minimo, color_tarjeta)
+    VALUES
+      (1, (SELECT id FROM categoria WHERE nombre = 'Alimentos'), 1, (SELECT id FROM estado WHERE nombre = 'activo'), 'Menú del Día', 550, 64, 10, '#ff6600'),
+      (2, (SELECT id FROM categoria WHERE nombre = 'Alimentos'), 1, (SELECT id FROM estado WHERE nombre = 'activo'), 'Producto Norte', 600, 10, 5, '#ff6600');
   `);
   return database;
 }
@@ -60,7 +66,7 @@ test('la migración crea el modelo y conserva el aislamiento por sucursal', () =
       INSERT INTO detalle_venta
         (venta_id, producto_id, cantidad, nombre_producto, precio_unitario_centavos)
       VALUES (?, ?, ?, ?, ?)
-    `).run(1001, 4, 1, 'Producto ajeno', 600),
+    `).run(1001, 2, 1, 'Producto ajeno', 600),
     /PRODUCTO_NO_DISPONIBLE/,
   );
 
