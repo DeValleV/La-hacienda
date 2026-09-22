@@ -1,6 +1,6 @@
 # Runbook de despliegue a producción
 
-Este procedimiento publica una instalación nueva de **Ikano**. La migración `0004_production_baseline.sql` elimina datos operativos y deja sólo la sucursal Ikano y sus cuatro categorías; úsala únicamente en una D1 nueva o autorizada para vaciarse.
+Este procedimiento publica una instalación nueva de **Ikano**. La migración inicial `0001_initial.sql` crea el esquema final y deja sólo la sucursal Ikano y sus cuatro categorías, sin usuarios, productos ni datos operativos.
 
 ## Antes de empezar
 

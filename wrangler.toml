@@ -11,7 +11,8 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "la-hacienda"
-database_id = "REPLACE_WITH_PRODUCTION_DATABASE_ID"
+# Sustituye este valor por el UUID que devuelve: pnpm exec wrangler d1 create la-hacienda
+database_id = "REEMPLAZAR_CON_ID_DE_PRODUCCION"
 migrations_dir = "migrations"
 
 [observability]
@@ -23,7 +24,8 @@ name = "la-hacienda-staging"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "la-hacienda-staging"
-database_id = "REPLACE_WITH_STAGING_DATABASE_ID"
+# Sustituye este valor por el UUID que devuelve: pnpm exec wrangler d1 create la-hacienda-staging
+database_id = "REEMPLAZAR_CON_ID_DE_STAGING"
 migrations_dir = "migrations"
 
 [env.staging.observability]
