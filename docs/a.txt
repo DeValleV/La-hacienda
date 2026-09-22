@@ -1,0 +1,4 @@
+curl --fail-with-body -X POST "https://la-hacienda.horariostec.workers.dev/api/setup/admin" \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Token: uwgh7thritwh4ip5eubf3847" \
+  --data '{"branchId":1,"name":"Administración Ikano","username":"admin","password":"adminadmin"}'

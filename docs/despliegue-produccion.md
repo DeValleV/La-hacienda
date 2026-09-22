@@ -18,7 +18,7 @@ pnpm exec wrangler d1 create la-hacienda-staging
 pnpm exec wrangler d1 create la-hacienda
 ```
 
-Sustituye los dos marcadores `REPLACE_WITH_...DATABASE_ID` de `wrangler.toml` con los IDs que devuelva Cloudflare. Staging usa `la-hacienda-staging`; producción usa `la-hacienda`.
+Sustituye los valores de `database_id` en `wrangler.toml` con los UUID que devuelva Cloudflare. Staging usa `la-hacienda-staging`; producción usa `la-hacienda`. No continúes hasta que ambos bindings `DB` apunten a sus D1 correspondientes.
 
 ## Staging
 
@@ -31,10 +31,10 @@ pnpm run deploy:staging
 Comprueba la línea base:
 
 ```bash
-pnpm exec wrangler d1 execute la-hacienda-staging --remote --command "SELECT id,nombre,codigo FROM sucursal; SELECT nombre FROM categoria ORDER BY id; SELECT COUNT(*) AS productos FROM producto;"
+pnpm exec wrangler d1 execute la-hacienda-staging --remote --env staging --command "SELECT id,nombre,codigo FROM sucursal; SELECT nombre FROM categoria ORDER BY id; SELECT COUNT(*) AS productos FROM producto;"
 ```
 
-Crea el administrador inicial con la URL que imprima el despliegue:
+Crea el administrador inicial con la URL que imprima el despliegue. No uses literalmente `<URL-STAGING>`: sustitúyelo por la URL completa, por ejemplo `https://la-hacienda-staging.<cuenta>.workers.dev`.
 
 ```bash
 curl --fail-with-body -X POST "<URL-STAGING>/api/setup/admin" \
@@ -43,7 +43,11 @@ curl --fail-with-body -X POST "<URL-STAGING>/api/setup/admin" \
   --data '{"branchId":1,"name":"Administración Ikano","username":"admin","password":"<CONTRASEÑA-LARGA>"}'
 ```
 
-Valida login, alta de producto, venta, reembolso, cierre de turno y ambos reportes Excel. Elimina el secreto de staging cuando termines la inicialización.
+Valida login, alta de producto, venta, reembolso, cierre de turno y ambos reportes Excel. Cuando termine la inicialización, elimina el secreto de staging (y rota el token si se expuso):
+
+```bash
+pnpm exec wrangler secret delete BOOTSTRAP_TOKEN --env staging
+```
 
 ## Producción
 
@@ -55,7 +59,20 @@ pnpm exec wrangler secret put BOOTSTRAP_TOKEN
 pnpm run deploy
 ```
 
-Repite la creación del administrador usando la URL y token de producción. Verifica el inicio de sesión y elimina `BOOTSTRAP_TOKEN` desde Workers & Pages → Settings → Variables and Secrets.
+El comando `pnpm run deploy` imprime la URL de producción. Crea el administrador inicial usando esa URL y el token que introdujiste en el paso anterior:
+
+```bash
+curl --fail-with-body -X POST "<URL-PRODUCCION>/api/setup/admin" \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Token: <TOKEN-PRODUCCION>" \
+  --data '{"branchId":1,"name":"Administración Ikano","username":"admin","password":"<CONTRASEÑA-LARGA-Y-SEGURA>"}'
+```
+
+Verifica el inicio de sesión con ese usuario y elimina el secreto de bootstrap para que no puedan crearse más administradores sin autorización:
+
+```bash
+pnpm exec wrangler secret delete BOOTSTRAP_TOKEN
+```
 
 ## Después
 
