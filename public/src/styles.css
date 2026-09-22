@@ -1554,6 +1554,7 @@ dialog::backdrop {
 .catalog-item { display: flex; justify-content: space-between; align-items: center; padding: 11px 4px; border-bottom: 1px solid var(--line); }
 button:disabled { cursor: not-allowed; opacity: .55; }
 .product-card[data-add] { cursor: pointer; }
+.product-card, .product-card * { user-select: none; -webkit-user-select: none; }
 .product-card[aria-disabled="true"] { cursor: not-allowed; opacity: .55; }
 .product-card.is-out-of-stock { filter: grayscale(.8); opacity: .42; }
 

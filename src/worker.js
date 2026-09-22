@@ -231,7 +231,7 @@ function randomSaleId() {
 
 async function currentShift(env, session) {
   const shift = await env.DB.prepare(`
-    SELECT t.id, t.fecha_apertura AS openedAt, t.estado AS status, u.nombre AS openedBy,
+    SELECT t.id, t.fecha_apertura AS openedAt, t.estado AS status, u.nombre_usuario AS openedBy,
            1 + (
              SELECT COUNT(*) FROM turno earlier
              WHERE earlier.sucursal_id = t.sucursal_id
@@ -263,7 +263,7 @@ async function closeShift(env, session) {
   if (!result.meta.changes) throw new ApiError(409, 'No hay un turno abierto.', 'NO_OPEN_SHIFT');
   const shift = await env.DB.prepare(`
     SELECT t.id, t.fecha_apertura AS openedAt, t.fecha_cierre AS closedAt, t.estado AS status,
-           opener.nombre AS openedBy, closer.nombre AS closedBy,
+           opener.nombre_usuario AS openedBy, closer.nombre_usuario AS closedBy,
            1 + (
              SELECT COUNT(*) FROM turno earlier
              WHERE earlier.sucursal_id = t.sucursal_id
@@ -322,7 +322,7 @@ async function createSale(request, env, session) {
 async function loadSale(db, session, saleId) {
   const sale = await db.prepare(`
     SELECT v.id, v.turno_id AS turnId, tv.nombre AS tipoVenta, v.fecha_hora AS date, v.total_centavos AS totalCents,
-           v.estado AS status, u.nombre AS userName
+           v.estado AS status, u.nombre_usuario AS userName
     FROM venta v JOIN tipo_venta tv ON tv.id = v.tipo_venta_id JOIN usuario u ON u.id = v.usuario_id
     WHERE v.id = ? AND v.sucursal_id = ?
   `).bind(saleId, session.branchId).first();
@@ -386,7 +386,7 @@ async function listSales(request, env, session) {
   if (date) {
     const shiftStatement = env.DB.prepare(`
       SELECT t.id, t.fecha_apertura AS openedAt, t.fecha_cierre AS closedAt, t.estado AS status,
-             opener.nombre AS openedBy, closer.nombre AS closedBy,
+             opener.nombre_usuario AS openedBy, closer.nombre_usuario AS closedBy,
              1 + (
                SELECT COUNT(*) FROM turno earlier
                WHERE earlier.sucursal_id = t.sucursal_id

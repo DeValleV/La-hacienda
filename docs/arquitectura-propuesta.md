@@ -33,7 +33,7 @@ Workers puede desplegar el código y los archivos estáticos como una sola unida
 
 El esquema completo y sus restricciones viven en [database-schema.md](database-schema.md).
 
-Para la configuración de una cuenta nueva y el despliegue completo, sigue [guia-despliegue-cloudflare.md](guia-despliegue-cloudflare.md). Incluye los comandos, la inicialización de administradores, validación de staging y operación posterior.
+Para contexto y referencias, sigue [guia-despliegue-cloudflare.md](guia-despliegue-cloudflare.md). Para ejecutar el proceso de publicación, usa el [runbook de producción](despliegue-produccion.md).
 
 ## Autenticación y autorización
 
@@ -65,6 +65,7 @@ La interfaz ya no contiene credenciales de demostración. El primer administrado
 | `GET /api/me` | Autenticado | Devuelve usuario, rol y sucursal activa. |
 | `GET /api/products` | Cajero, encargado, administrador | Lista productos de la sucursal de la sesión. |
 | `POST /api/sales` | Cajero, encargado, administrador | Crea venta, detalles y descuenta stock en una transacción. |
+| `POST /api/sales/:id/refund` | Encargado, administrador | Reembolsa una venta completa del turno abierto y devuelve existencias. |
 | `GET /api/sales?date=AAAA-MM-DD` | Cajero, encargado, administrador | Historial de sólo lectura de un día; incluye todos los turnos visibles de la sucursal. El cajero ve únicamente sus ventas y los demás roles ven su sucursal. |
 | `GET /api/sales/months` y `GET /api/sales/days?month=AAAA-MM` | Cajero, encargado, administrador | Devuelven los meses y días con ventas visibles para el calendario; los días sin ventas no se pueden seleccionar. |
 | `GET /api/shifts/current` | Autenticado | Consulta el turno abierto de la sucursal. |
@@ -104,8 +105,8 @@ server.js                servidor estático local; no sustituye la API
 - Login real por sucursal, usuario y contraseña; la pantalla se oculta al autenticar.
 - Inventario filtrable por nombre, ID, categoría y estado (activos, desactivados o todos), con alta, edición, reposición individual o masiva, desactivación lógica y exportación en Excel (`.xlsx`). El nivel de stock sustituye la columna de estado.
 - Punto de venta bloqueado si no existe un turno abierto. `Pagado` y `Cambio` se calculan sólo en el navegador y no se persisten.
-- Apertura/cierre de turno y reporte exportable en Excel del turno actual o recién cerrado.
-- Historial de ventas de sólo lectura por día: calendario que sólo habilita días con ventas, resumen diario y grupos colapsables por turno.
+- Apertura/cierre de turno y reembolso completo de ventas durante el turno abierto.
+- Historial de ventas por día: calendario que sólo habilita días con ventas, resumen diario, grupos colapsables por turno y exportación Excel del día seleccionado.
 - Configuración de usuarios de la sucursal, sucursales y los catálogos editables de categoría y marca.
 - Navegación y acciones administrativas ocultas de acuerdo con el rol; el Worker vuelve a validar todos los permisos.
 

@@ -153,7 +153,16 @@ Cabecera de una operación de venta.
 
 Por ahora no se guardan método de pago, importe recibido ni cambio. Esos valores sólo se usan en el POS para validar el cobro en efectivo y calcular el cambio mostrado.
 
-Una venta anulada permanece en el historial. No se elimina: se registra quién y cuándo la anuló, y se devuelve al producto la cantidad de cada detalle dentro de la misma transacción.
+Los reembolsos no eliminan ni cambian la venta original: se registran en `reembolso` y devuelven existencias al producto. Actualmente sólo se permite un reembolso completo por venta durante el turno abierto.
+
+### `reembolso` y `detalle_reembolso`
+
+Registran el reembolso de una venta y los productos devueltos al inventario.
+
+| Tabla | Columnas principales | Regla |
+| --- | --- | --- |
+| `reembolso` | `id`, `venta_id`, `usuario_id`, `fecha` | Una operación de reembolso asociada a una venta y al usuario que la autorizó. |
+| `detalle_reembolso` | `reembolso_id`, `producto_id`, `cantidad` | Cantidad devuelta por producto; clave primaria compuesta. |
 
 ### `detalle_venta`
 

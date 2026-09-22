@@ -15,6 +15,7 @@ class HistoryView {
 
   bindEvents() {
     document.getElementById('history-date-picker').addEventListener('click', () => this.openCalendar());
+    document.getElementById('export-history').addEventListener('click', () => this.exportDay());
     document.getElementById('history-calendar-previous').addEventListener('click', () => this.changeCalendarMonth(-1));
     document.getElementById('history-calendar-next').addEventListener('click', () => this.changeCalendarMonth(1));
     document.getElementById('history-calendar-days').addEventListener('click', (event) => {
@@ -154,12 +155,14 @@ class HistoryView {
       period.textContent = 'Seleccione un día para consultar todos los turnos de la sucursal.';
       this.renderStats([]);
       document.getElementById('history-shifts').innerHTML = '<div class="panel history-empty muted">No hay un día seleccionado.</div>';
+      document.getElementById('export-history').disabled = true;
       return;
     }
     document.getElementById('history-date-label').textContent = this.formatDay(this.selectedDate);
     period.textContent = `Todos los turnos registrados el ${this.formatDay(this.selectedDate)} en esta sucursal.`;
     this.renderStats(this.daySales);
     this.renderShifts();
+    document.getElementById('export-history').disabled = !this.daySales.length;
   }
 
   renderStats(sales) {
@@ -201,6 +204,25 @@ class HistoryView {
         </tbody></table></div>
       </details>`;
     }).join('');
+  }
+
+  exportDay() {
+    if (!this.selectedDate || !this.daySales.length) return;
+    const rows = this.daySales.map((sale) => {
+      const refunded = sale.lines.every((line) => line.qty === (line.refundedQty || 0));
+      return [
+        sale.turnId, this.formatTime(sale.date), sale.userName, this.getSaleTypeLabel(sale.tipoVenta),
+        sale.lines.map((line) => `${line.productName} ×${line.qty}`).join('\n'), sale.total,
+        refunded ? 'Reembolsada' : 'Confirmada',
+      ];
+    });
+    window.downloadXlsx(`historial-ventas-${this.selectedDate}.xlsx`, [{
+      name: 'Historial de ventas',
+      columns: [
+        { width: 11 }, { width: 14 }, { width: 20 }, { width: 14 }, { width: 46, wrap: true }, { width: 16, type: 'currency' }, { width: 15 },
+      ],
+      rows: [['Turno', 'Hora', 'Usuario', 'Tipo', 'Detalle', 'Total venta', 'Estado'], ...rows],
+    }]);
   }
 
   openRefund(saleId) {

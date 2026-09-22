@@ -118,9 +118,9 @@ class PointOfSaleApp {
     document.getElementById('app-shell').hidden = false;
     const sessionUser = document.getElementById('session-user');
     const name = document.createElement('strong');
-    name.textContent = user.name;
+    name.textContent = user.username;
     const details = document.createElement('span');
-    details.textContent = `${user.role} · ${user.branchName}`;
+    details.textContent = `${user.name} · ${user.role} · ${user.branchName}`;
     sessionUser.replaceChildren(name, details, document.getElementById('logout'));
     this.applyPermissions();
     try {

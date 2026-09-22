@@ -30,9 +30,9 @@ No se requieren Cloudflare Pages, R2, KV, servidor propio ni una base de datos e
 - Alta, edición, reposición y desactivación lógica de productos.
 - Ventas clasificadas como comedor, facturada o personal.
 - Turnos: sólo uno abierto por sucursal; no se puede cobrar fuera de un turno.
-- Historial de ventas de sólo lectura con producto, nombre y precio históricos.
+- Historial de ventas por día, reembolsos completos del turno activo y exportación a Excel.
 - Configuración de usuarios de la sucursal actual, sucursales y catálogos compartidos.
-- Exportación Excel (`.xlsx`) de inventario y de ventas del turno.
+- Exportación Excel (`.xlsx`) de inventario y del historial del día seleccionado.
 
 Las reglas del modelo están explicadas en [database-schema.md](database-schema.md) y la arquitectura técnica en [arquitectura-propuesta.md](arquitectura-propuesta.md).
 
@@ -66,7 +66,7 @@ pnpm install
 pnpm test
 ```
 
-La primera instalación genera `pnpm-lock.yaml`; debe conservarse y versionarse junto con el código. Las dos pruebas deben terminar correctamente antes de continuar.
+Conserva y versiona `pnpm-lock.yaml`. Todas las pruebas deben terminar correctamente antes de continuar.
 
 ## 4. Flujo completo: ejecutar sólo en local
 
@@ -97,16 +97,16 @@ Wrangler crea una D1 local, aplica todas las migraciones en orden y muestra una 
 
 ### Paso 3: crear administradores locales
 
-La base local empieza sin usuarios. Desde otra terminal, crea un administrador para cada sucursal semilla. Sustituye los valores entre `<...>`; conserva la URL local tal como la imprimió Wrangler.
+La base local empieza sin usuarios. Desde otra terminal, crea el administrador inicial de `Ikano`. Sustituye los valores entre `<...>`; conserva la URL local tal como la imprimió Wrangler.
 
 ```bash
 curl --fail-with-body -X POST "http://localhost:8787/api/setup/admin" \
   -H "Content-Type: application/json" \
   -H "X-Bootstrap-Token: <TOKEN-DE-.dev.vars>" \
-  --data '{"branchId":1,"name":"Administración Centro","username":"admin.centro","password":"<CONTRASEÑA-LARGA>"}'
+  --data '{"branchId":1,"name":"Administración Ikano","username":"admin","password":"<CONTRASEÑA-LARGA>"}'
 ```
 
-Repite para `branchId: 2` si quieres probar Sucursal Norte. Inicia sesión desde la interfaz y crea los demás usuarios, productos o turnos de prueba.
+Inicia sesión desde la interfaz y crea los demás usuarios, marcas, productos o turnos de prueba.
 
 ### Paso 4: validar y reiniciar si hace falta
 
@@ -174,7 +174,7 @@ pnpm run db:migrate:staging
 pnpm exec wrangler d1 execute la-hacienda-staging --remote --command "SELECT id, nombre, codigo, activa FROM sucursal;"
 ```
 
-La consulta debe mostrar las dos sucursales semilla. Anota sus IDs; en una base limpia serán normalmente `1` y `2`, pero usa siempre el resultado real.
+La consulta debe mostrar únicamente `Ikano`. En una base nueva su ID será `1`; confirma siempre el resultado antes de crear el administrador.
 
 Genera un `BOOTSTRAP_TOKEN` aleatorio y guárdalo temporalmente como secreto de staging:
 
@@ -193,10 +193,10 @@ Copia la URL `workers.dev` que imprima el despliegue. Si Cloudflare pide elegir 
 curl --fail-with-body -X POST "<URL-COMPLETA-DE-STAGING>/api/setup/admin" \
   -H "Content-Type: application/json" \
   -H "X-Bootstrap-Token: <BOOTSTRAP_TOKEN-DE-STAGING>" \
-  --data '{"branchId":1,"name":"Administración Centro","username":"admin.centro","password":"<CONTRASEÑA-LARGA>"}'
+  --data '{"branchId":1,"name":"Administración Ikano","username":"admin","password":"<CONTRASEÑA-LARGA>"}'
 ```
 
-Repite con el ID de cada sucursal y credenciales distintas. Después inicia sesión y completa la validación de staging.
+Después inicia sesión y completa la validación de staging.
 
 ## 6. Checklist de validación de staging
 
@@ -208,8 +208,9 @@ Antes de producción, realiza esta lista con cuentas reales de prueba:
 - Una venta descuenta stock, guarda nombre/precio histórico y aparece en el historial.
 - No se puede cobrar sin turno abierto ni abrir dos turnos en la misma sucursal.
 - Un producto desactivado no aparece para cobrar y conserva su historial.
-- Un producto de Centro no aparece ni se puede vender desde Norte.
-- Exportación Excel (`.xlsx`) de inventario y de ventas del turno.
+- Un producto agotado no puede agregarse al pedido.
+- Un reembolso completo devuelve existencias, queda visible en rojo y no puede repetirse.
+- Exportación Excel (`.xlsx`) de inventario y del historial del día seleccionado.
 - Cierre de turno con usuario y fecha correctos.
 
 Revisa errores en **Workers & Pages → Worker → Observability/Logs**. El proyecto habilita observabilidad en `wrangler.toml`.
@@ -249,7 +250,7 @@ No uses una Route para este caso salvo que el hostname ya tenga un servidor de o
 ## 9. Operación diaria y cambios futuros
 
 - Las personas usan la interfaz; no deben ejecutar SQL directamente sobre producción.
-- Exporta periódicamente los archivos Excel (`.xlsx`) de ventas y guárdalos fuera del equipo de caja.
+- Exporta periódicamente inventario e historial de ventas (`.xlsx`) y guárdalos fuera del equipo de caja.
 - Antes de una migración nueva: prueba local, aplica a staging, valida y luego aplica a producción.
 - D1 ofrece Time Travel para recuperación a un punto en el tiempo; verifica su disponibilidad en la cuenta antes de depender de él como procedimiento de recuperación.
 - Revisa Logs tras cada despliegue y nunca incluyas contraseñas, tokens ni información sensible en `console.log`.
