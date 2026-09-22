@@ -1,5 +1,6 @@
 const encoder = new TextEncoder();
-const PBKDF2_ITERATIONS = 310000;
+// Cloudflare Workers Web Crypto admite como máximo 100 000 iteraciones PBKDF2.
+const PBKDF2_ITERATIONS = 100000;
 const SESSION_HOURS = 12;
 
 function toBase64(bytes) {
@@ -36,10 +37,14 @@ export async function hashPassword(password) {
 export async function verifyPassword(password, encodedHash) {
   const [algorithm, iterationsText, saltText, hashText] = String(encodedHash).split('$');
   const iterations = Number(iterationsText);
-  if (algorithm !== 'pbkdf2_sha256' || !Number.isInteger(iterations) || iterations < 100000 || !saltText || !hashText) return false;
-  const expected = fromBase64(hashText);
-  const actual = await derivePassword(password, fromBase64(saltText), iterations);
-  return constantTimeEqual(actual, expected);
+  if (algorithm !== 'pbkdf2_sha256' || !Number.isInteger(iterations) || iterations < PBKDF2_ITERATIONS || !saltText || !hashText) return false;
+  try {
+    const expected = fromBase64(hashText);
+    const actual = await derivePassword(password, fromBase64(saltText), iterations);
+    return constantTimeEqual(actual, expected);
+  } catch {
+    return false;
+  }
 }
 
 export async function hashToken(token) {
