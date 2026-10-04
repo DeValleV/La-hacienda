@@ -32,6 +32,7 @@ class InventoryView {
     this.previewUrl = null;
     this.cropState = null;
     this.colorExtraction = Promise.resolve();
+    this.imageOptimization = Promise.resolve();
     this.bindEvents();
   }
 
@@ -343,7 +344,7 @@ class InventoryView {
     const editingProduct = this.products.find((item) => item.id === this.editingProductId);
     submit.disabled = true;
     try {
-      await this.colorExtraction;
+      await this.imageOptimization;
       const color = document.getElementById('new-color').value;
       await this.onSaveProduct({ category, brand, name, price, stock, minStock, color, image: this.pendingImage }, editingProduct?.id);
       document.getElementById('product-dialog').close();
@@ -473,12 +474,17 @@ class InventoryView {
     this.pendingImage = file;
     this.showImagePreview(URL.createObjectURL(file), `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`);
     this.colorExtraction = this.updateProductColorFromImage(file);
+    this.imageOptimization = this.colorExtraction.then(async () => {
+      const optimized = await this.optimizeProductImage(file);
+      if (this.pendingImage === file) this.pendingImage = optimized;
+    });
     document.getElementById('crop-product-image').hidden = false;
   }
 
   clearProductImage() {
     this.pendingImage = null;
     this.colorExtraction = Promise.resolve();
+    this.imageOptimization = Promise.resolve();
     if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
     this.previewUrl = null;
     document.getElementById('product-image-input').value = '';
@@ -591,7 +597,7 @@ class InventoryView {
     canvas.height = outputHeight;
     const context = canvas.getContext('2d');
     context.drawImage(source, ((state.width - dimensions.width) / 2 + state.offsetX) * factor, ((state.height - dimensions.height) / 2 + state.offsetY) * factor, dimensions.width * factor, dimensions.height * factor);
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.88));
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.75));
     if (!blob) {
       this.showToast('No se pudo crear el recorte.');
       return;
@@ -600,7 +606,30 @@ class InventoryView {
     this.pendingImage = new File([blob], `${name}.webp`, { type: 'image/webp' });
     this.showImagePreview(URL.createObjectURL(this.pendingImage), `${this.pendingImage.name} · recorte ajustado`);
     this.colorExtraction = this.updateProductColorFromImage(this.pendingImage);
+    this.imageOptimization = this.colorExtraction;
     document.getElementById('image-crop-dialog').close();
+  }
+
+  async optimizeProductImage(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+        image.src = url;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext('2d').drawImage(image, 0, 0);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.75));
+      if (!blob) throw new Error('No se pudo optimizar la imagen.');
+      const name = file.name.replace(/\.[^.]+$/, '') || 'producto';
+      return new File([blob], `${name}.webp`, { type: 'image/webp' });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   }
 
   async updateProductColorFromImage(file) {

@@ -15,4 +15,4 @@ Después aplique las migraciones y despliegue normalmente. Los archivos no son p
 
 ## Uso
 
-En **Inventario → Nuevo producto** o **Editar**, seleccione una foto o arrástrela al área de imagen. Se aceptan JPG, PNG y WebP de hasta 5 MB. Al guardar, una nueva foto reemplaza la anterior.
+En **Inventario → Nuevo producto** o **Editar**, seleccione una foto o arrástrela al área de imagen. Se aceptan JPG, PNG y WebP de hasta 5 MB. Antes de subirla, el navegador la convierte a WebP con calidad 75%; al guardar, una nueva foto reemplaza la anterior.
