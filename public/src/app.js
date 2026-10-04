@@ -194,9 +194,16 @@ class PointOfSaleApp {
   }
 
   async saveProduct(product, productId) {
-    if (productId) await this.api.updateProduct(productId, product);
-    else await this.api.createProduct(product);
+    const result = productId ? await this.api.updateProduct(productId, product) : await this.api.createProduct(product);
+    try {
+      if (product.image) await this.api.uploadProductImage(result.product.id, product.image);
+    } catch (error) {
+      await this.loadProducts();
+      error.productId = result.product.id;
+      throw error;
+    }
     await this.loadProducts();
+    return result.product;
   }
 
   async restockProduct(productId, quantity) {

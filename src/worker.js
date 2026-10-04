@@ -126,13 +126,14 @@ function mapProduct(row) {
     id: row.id, name: row.name, category: row.category, brand: row.brand,
     status: row.status, price: row.priceCents / 100, stock: row.stock,
     minStock: row.minStock, color: row.color,
+    imageUrl: row.imageKey ? `/api/products/${row.id}/image?v=${encodeURIComponent(row.imageKey)}` : null,
   };
 }
 
 const PRODUCT_SELECT = `
   SELECT p.id, p.nombre_base AS name, c.nombre AS category, m.nombre AS brand,
          e.nombre AS status, p.precio_centavos AS priceCents,
-         p.stock, p.stock_minimo AS minStock, p.color_tarjeta AS color
+         p.stock, p.stock_minimo AS minStock, p.color_tarjeta AS color, p.imagen_clave AS imageKey
   FROM producto p JOIN categoria c ON c.id = p.categoria_id
   JOIN marca m ON m.id = p.marca_id JOIN estado e ON e.id = p.estado_id`;
 
@@ -174,6 +175,64 @@ async function updateProduct(request, env, session, productId) {
   if (!result.meta.changes) throw new ApiError(404, 'Producto no encontrado.', 'NOT_FOUND');
   const row = await env.DB.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.sucursal_id = ?`).bind(productId, session.branchId).first();
   return json({ product: mapProduct(row) });
+}
+
+const PRODUCT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+function imageContentType(bytes) {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+    && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return 'image/png';
+  if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+    && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  return null;
+}
+
+async function productImageRecord(env, session, productId) {
+  const product = await env.DB.prepare('SELECT id, imagen_clave AS imageKey FROM producto WHERE id = ? AND sucursal_id = ?')
+    .bind(productId, session.branchId).first();
+  if (!product) throw new ApiError(404, 'Producto no encontrado.', 'NOT_FOUND');
+  return product;
+}
+
+async function uploadProductImage(request, env, session, productId) {
+  requireSession(session, PRODUCT_ROLES);
+  if (!env.PRODUCT_IMAGES) throw new ApiError(503, 'El almacenamiento de imágenes no está configurado.', 'IMAGE_STORAGE_UNAVAILABLE');
+  const declaredSize = Number(request.headers.get('Content-Length'));
+  if (Number.isFinite(declaredSize) && declaredSize > PRODUCT_IMAGE_MAX_BYTES) {
+    throw new ApiError(413, 'La imagen no debe superar 5 MB.', 'IMAGE_TOO_LARGE');
+  }
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (!bytes.length || bytes.length > PRODUCT_IMAGE_MAX_BYTES) throw new ApiError(413, 'La imagen no debe superar 5 MB.', 'IMAGE_TOO_LARGE');
+  const contentType = imageContentType(bytes);
+  if (!contentType) throw new ApiError(415, 'Use una imagen JPG, PNG o WebP válida.', 'INVALID_IMAGE');
+
+  const product = await productImageRecord(env, session, productId);
+  const key = `branches/${session.branchId}/products/${productId}/${crypto.randomUUID()}`;
+  await env.PRODUCT_IMAGES.put(key, bytes, { httpMetadata: { contentType } });
+  try {
+    await env.DB.prepare('UPDATE producto SET imagen_clave = ? WHERE id = ? AND sucursal_id = ?')
+      .bind(key, productId, session.branchId).run();
+  } catch (error) {
+    await env.PRODUCT_IMAGES.delete(key);
+    throw error;
+  }
+  if (product.imageKey) await env.PRODUCT_IMAGES.delete(product.imageKey);
+  const row = await env.DB.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.sucursal_id = ?`).bind(productId, session.branchId).first();
+  return json({ product: mapProduct(row) });
+}
+
+async function getProductImage(env, session, productId) {
+  if (!env.PRODUCT_IMAGES) throw new ApiError(503, 'El almacenamiento de imágenes no está configurado.', 'IMAGE_STORAGE_UNAVAILABLE');
+  const product = await productImageRecord(env, session, productId);
+  if (!product.imageKey) throw new ApiError(404, 'El producto no tiene imagen.', 'NOT_FOUND');
+  const object = await env.PRODUCT_IMAGES.get(product.imageKey);
+  if (!object) throw new ApiError(404, 'No se encontró la imagen.', 'NOT_FOUND');
+  return new Response(object.body, { headers: {
+    'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
+    'Cache-Control': 'private, max-age=3600',
+    ETag: object.httpEtag,
+  } });
 }
 
 async function restockProduct(request, env, session, productId) {
@@ -637,6 +696,9 @@ async function handleApi(request, env) {
 
   const updateMatch = pathname.match(/^\/api\/products\/(\d+)$/);
   if (updateMatch && method === 'PATCH') return updateProduct(request, env, session, Number(updateMatch[1]));
+  const imageMatch = pathname.match(/^\/api\/products\/(\d+)\/image$/);
+  if (imageMatch && method === 'GET') return getProductImage(env, session, Number(imageMatch[1]));
+  if (imageMatch && method === 'PUT') return uploadProductImage(request, env, session, Number(imageMatch[1]));
   const restockMatch = pathname.match(/^\/api\/products\/(\d+)\/restock$/);
   if (restockMatch && method === 'POST') return restockProduct(request, env, session, Number(restockMatch[1]));
   if (method === 'POST' && pathname === '/api/products/restock-batch') return restockProducts(request, env, session);

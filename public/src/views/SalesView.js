@@ -98,8 +98,12 @@ class SalesView {
       const availableStock = Math.max(0, product.stock - reserved);
       const isOutOfStock = availableStock <= 0;
       const canAdd = this.isShiftOpen && !isOutOfStock;
+      const image = product.imageUrl
+        ? `<img class="product-card-image" src="${escapeHtml(product.imageUrl)}" alt="" loading="lazy">`
+        : '';
       return `
-      <article class="product-card${isOutOfStock ? ' is-out-of-stock' : ''}"${canAdd ? ` data-add="${product.id}"` : ''} aria-disabled="${!canAdd}" style="--product-color: ${product.color || '#ff6600'};">
+      <article class="product-card${product.imageUrl ? ' has-image' : ''}${isOutOfStock ? ' is-out-of-stock' : ''}"${canAdd ? ` data-add="${product.id}"` : ''} aria-disabled="${!canAdd}" style="--product-color: ${product.color || '#ff6600'};">
+        ${image}
         <h3>${escapeHtml(product.name)}</h3>
         <footer>
           <small>${availableStock} disponibles</small>

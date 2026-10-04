@@ -12,6 +12,9 @@ const FRIENDLY_API_ERRORS = {
   INVALID_ORIGIN: 'Esta acción debe realizarse desde la página del sistema.',
   INTERNAL_ERROR: 'No se pudo completar la operación por un problema del sistema. Inténtelo de nuevo.',
   CATALOG_NOT_INITIALIZED: 'No se pudo cargar la configuración de productos. Avise a un administrador.',
+  IMAGE_TOO_LARGE: 'La imagen no debe superar 5 MB.',
+  INVALID_IMAGE: 'Use una imagen JPG, PNG o WebP válida.',
+  IMAGE_STORAGE_UNAVAILABLE: 'El almacenamiento de imágenes aún no está configurado.',
 };
 
 function friendlyError(payload, status) {
@@ -52,6 +55,22 @@ class ApiClient {
   getProducts() { return this.request('/api/products'); }
   createProduct(product) { return this.request('/api/products', { method: 'POST', body: JSON.stringify(product) }); }
   updateProduct(id, product) { return this.request(`/api/products/${id}`, { method: 'PATCH', body: JSON.stringify(product) }); }
+  async uploadProductImage(id, image) {
+    let response;
+    try {
+      response = await fetch(`/api/products/${id}/image`, { method: 'PUT', credentials: 'same-origin', body: image });
+    } catch {
+      throw new Error('No se pudo subir la imagen. Revise su conexión e inténtelo de nuevo.');
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(friendlyError(payload, response.status));
+      error.status = response.status;
+      error.code = payload.error?.code;
+      throw error;
+    }
+    return payload;
+  }
   restockProduct(id, quantity) { return this.request(`/api/products/${id}/restock`, { method: 'POST', body: JSON.stringify({ quantity }) }); }
   restockProducts(items) { return this.request('/api/products/restock-batch', { method: 'POST', body: JSON.stringify({ items }) }); }
   deactivateProduct(id) { return this.request(`/api/products/${id}/deactivate`, { method: 'POST', body: '{}' }); }

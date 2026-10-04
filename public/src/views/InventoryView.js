@@ -28,6 +28,10 @@ class InventoryView {
     this.searchTerm = '';
     this.activeCategory = 'all';
     this.statusFilter = 'activo';
+    this.pendingImage = null;
+    this.previewUrl = null;
+    this.cropState = null;
+    this.colorExtraction = Promise.resolve();
     this.bindEvents();
   }
 
@@ -58,6 +62,32 @@ class InventoryView {
     document.getElementById('add-brand').onclick = () => this.toggleNewCatalogField('brand');
     document.getElementById('confirm-brand').onclick = () => this.addCatalogOption('brand');
     document.getElementById('open-color-palette').onclick = () => this.openColorPalette();
+    const imageInput = document.getElementById('product-image-input');
+    const imageDropzone = document.getElementById('product-image-dropzone');
+    imageDropzone.onclick = () => imageInput.click();
+    imageInput.addEventListener('change', () => this.setProductImage(imageInput.files[0]));
+    ['dragenter', 'dragover'].forEach((eventName) => imageDropzone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      imageDropzone.classList.add('is-dragging');
+    }));
+    ['dragleave', 'drop'].forEach((eventName) => imageDropzone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      imageDropzone.classList.remove('is-dragging');
+    }));
+    imageDropzone.addEventListener('drop', (event) => this.setProductImage(event.dataTransfer.files[0]));
+    document.getElementById('crop-product-image').onclick = () => this.openImageCropper();
+    document.getElementById('image-crop-zoom').addEventListener('input', (event) => this.updateCropScale(Number(event.target.value)));
+    document.getElementById('apply-image-crop').onclick = () => this.applyImageCrop();
+    const cropDialog = document.getElementById('image-crop-dialog');
+    ['cancel-image-crop', 'cancel-image-crop-secondary'].forEach((id) => {
+      document.getElementById(id).onclick = () => cropDialog.close();
+    });
+    cropDialog.addEventListener('close', () => this.disposeCropState());
+    const cropViewport = document.getElementById('image-crop-viewport');
+    cropViewport.addEventListener('pointerdown', (event) => this.startCropDrag(event));
+    cropViewport.addEventListener('pointermove', (event) => this.moveCropDrag(event));
+    cropViewport.addEventListener('pointerup', (event) => this.endCropDrag(event));
+    cropViewport.addEventListener('pointercancel', (event) => this.endCropDrag(event));
     document.getElementById('color-options').addEventListener('click', (event) => {
       const colorOption = event.target.closest('[data-color]');
       if (colorOption) this.selectCardColor(colorOption.dataset.color);
@@ -237,6 +267,7 @@ class InventoryView {
     document.getElementById('save-product').textContent = 'Guardar producto';
     this.populateProductFields();
     document.querySelector('#product-dialog form').reset();
+    this.clearProductImage();
     document.getElementById('new-min-stock').value = 0;
     this.updateColorPreview();
     this.hideNewCategoryField();
@@ -259,6 +290,8 @@ class InventoryView {
     document.getElementById('new-stock').value = product.stock;
     document.getElementById('new-min-stock').value = product.minStock ?? 0;
     document.getElementById('new-color').value = product.color || '#ff6600';
+    this.clearProductImage();
+    if (product.imageUrl) this.showImagePreview(product.imageUrl, 'Imagen actual. Seleccione o arrastre otra para reemplazarla.');
     this.updateColorPreview();
     this.hideNewCategoryField();
     this.hideNewCatalogField('brand');
@@ -299,7 +332,6 @@ class InventoryView {
     const price = Number(document.getElementById('new-price').value);
     const stock = Number(document.getElementById('new-stock').value);
     const minStock = Number(document.getElementById('new-min-stock').value);
-    const color = document.getElementById('new-color').value;
 
     if (!category) return this.showToast('Seleccione una categoría para el producto.');
     if (!brand) return this.showToast('Seleccione una marca para el producto.');
@@ -311,10 +343,19 @@ class InventoryView {
     const editingProduct = this.products.find((item) => item.id === this.editingProductId);
     submit.disabled = true;
     try {
-      await this.onSaveProduct({ category, brand, name, price, stock, minStock, color }, editingProduct?.id);
+      await this.colorExtraction;
+      const color = document.getElementById('new-color').value;
+      await this.onSaveProduct({ category, brand, name, price, stock, minStock, color, image: this.pendingImage }, editingProduct?.id);
       document.getElementById('product-dialog').close();
       this.showToast(editingProduct ? 'Producto actualizado.' : 'Producto agregado al inventario.');
     } catch (error) {
+      if (!editingProduct && error.productId) {
+        this.editingProductId = error.productId;
+        document.querySelector('#product-dialog h2').textContent = 'Editar producto';
+        document.getElementById('save-product').textContent = 'Guardar cambios';
+        this.showToast(`El producto fue creado, pero no se pudo subir la imagen: ${error.message}`);
+        return;
+      }
       this.showToast(error.message);
     } finally {
       submit.disabled = false;
@@ -416,6 +457,204 @@ class InventoryView {
     const trigger = document.getElementById('open-color-palette');
     trigger.style.setProperty('--selected-color', color);
     trigger.setAttribute('aria-label', `Elegir color de la tarjeta, color actual ${color}`);
+  }
+
+  setProductImage(file) {
+    if (!file) return;
+    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowedTypes.has(file.type)) {
+      this.showToast('Seleccione una imagen JPG, PNG o WebP.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      this.showToast('La imagen no debe superar 5 MB.');
+      return;
+    }
+    this.pendingImage = file;
+    this.showImagePreview(URL.createObjectURL(file), `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+    this.colorExtraction = this.updateProductColorFromImage(file);
+    document.getElementById('crop-product-image').hidden = false;
+  }
+
+  clearProductImage() {
+    this.pendingImage = null;
+    this.colorExtraction = Promise.resolve();
+    if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
+    this.previewUrl = null;
+    document.getElementById('product-image-input').value = '';
+    const zone = document.getElementById('product-image-dropzone');
+    zone.classList.remove('has-image');
+    zone.querySelector('.product-image-preview').style.removeProperty('background-image');
+    zone.querySelector('strong').textContent = 'Seleccionar imagen';
+    zone.querySelector('small').textContent = 'o arrastra y suelta aquí · JPG, PNG o WebP · máximo 5 MB';
+    document.getElementById('crop-product-image').hidden = true;
+  }
+
+  showImagePreview(url, description) {
+    if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
+    this.previewUrl = url.startsWith('blob:') ? url : null;
+    const zone = document.getElementById('product-image-dropzone');
+    zone.classList.add('has-image');
+    zone.querySelector('.product-image-preview').style.backgroundImage = `url("${url}")`;
+    zone.querySelector('strong').textContent = 'Cambiar imagen';
+    zone.querySelector('small').textContent = description;
+  }
+
+  async openImageCropper() {
+    if (!this.pendingImage) return;
+    const source = document.getElementById('image-crop-source');
+    const sourceUrl = URL.createObjectURL(this.pendingImage);
+    try {
+      await new Promise((resolve, reject) => {
+        source.onload = resolve;
+        source.onerror = reject;
+        source.src = sourceUrl;
+      });
+      const dialog = document.getElementById('image-crop-dialog');
+      dialog.showModal();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const viewport = document.getElementById('image-crop-viewport');
+      const width = viewport.clientWidth;
+      const height = viewport.clientHeight;
+      const baseScale = Math.max(width / source.naturalWidth, height / source.naturalHeight);
+      this.cropState = { sourceUrl, width, height, naturalWidth: source.naturalWidth, naturalHeight: source.naturalHeight, baseScale, zoom: 0, offsetX: 0, offsetY: 0 };
+      document.getElementById('image-crop-zoom').value = 0;
+      this.renderCropImage();
+    } catch {
+      if (document.getElementById('image-crop-dialog').open) document.getElementById('image-crop-dialog').close();
+      URL.revokeObjectURL(sourceUrl);
+      this.showToast('No se pudo abrir la imagen para recortarla.');
+    }
+  }
+
+  updateCropScale(zoom) {
+    if (!this.cropState) return;
+    this.cropState.zoom = zoom;
+    this.clampCropOffset();
+    this.renderCropImage();
+  }
+
+  cropDimensions() {
+    const state = this.cropState;
+    const scale = state.baseScale * (1 + state.zoom / 50);
+    return { scale, width: state.naturalWidth * scale, height: state.naturalHeight * scale };
+  }
+
+  clampCropOffset() {
+    const state = this.cropState;
+    const dimensions = this.cropDimensions();
+    const maxX = Math.max(0, (dimensions.width - state.width) / 2);
+    const maxY = Math.max(0, (dimensions.height - state.height) / 2);
+    state.offsetX = Math.max(-maxX, Math.min(maxX, state.offsetX));
+    state.offsetY = Math.max(-maxY, Math.min(maxY, state.offsetY));
+  }
+
+  renderCropImage() {
+    const state = this.cropState;
+    if (!state) return;
+    const dimensions = this.cropDimensions();
+    const source = document.getElementById('image-crop-source');
+    source.style.width = `${dimensions.width}px`;
+    source.style.height = `${dimensions.height}px`;
+    source.style.transform = `translate(${(state.width - dimensions.width) / 2 + state.offsetX}px, ${(state.height - dimensions.height) / 2 + state.offsetY}px)`;
+  }
+
+  startCropDrag(event) {
+    if (!this.cropState) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    this.cropState.drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, offsetX: this.cropState.offsetX, offsetY: this.cropState.offsetY };
+  }
+
+  moveCropDrag(event) {
+    const state = this.cropState;
+    if (!state?.drag || state.drag.pointerId !== event.pointerId) return;
+    state.offsetX = state.drag.offsetX + event.clientX - state.drag.startX;
+    state.offsetY = state.drag.offsetY + event.clientY - state.drag.startY;
+    this.clampCropOffset();
+    this.renderCropImage();
+  }
+
+  endCropDrag(event) {
+    if (this.cropState?.drag?.pointerId === event.pointerId) this.cropState.drag = null;
+  }
+
+  async applyImageCrop() {
+    const state = this.cropState;
+    if (!state) return;
+    const source = document.getElementById('image-crop-source');
+    const dimensions = this.cropDimensions();
+    const outputWidth = 1200;
+    const outputHeight = 800;
+    const factor = outputWidth / state.width;
+    const canvas = document.createElement('canvas');
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    const context = canvas.getContext('2d');
+    context.drawImage(source, ((state.width - dimensions.width) / 2 + state.offsetX) * factor, ((state.height - dimensions.height) / 2 + state.offsetY) * factor, dimensions.width * factor, dimensions.height * factor);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.88));
+    if (!blob) {
+      this.showToast('No se pudo crear el recorte.');
+      return;
+    }
+    const name = this.pendingImage.name.replace(/\.[^.]+$/, '') || 'producto';
+    this.pendingImage = new File([blob], `${name}.webp`, { type: 'image/webp' });
+    this.showImagePreview(URL.createObjectURL(this.pendingImage), `${this.pendingImage.name} · recorte ajustado`);
+    this.colorExtraction = this.updateProductColorFromImage(this.pendingImage);
+    document.getElementById('image-crop-dialog').close();
+  }
+
+  async updateProductColorFromImage(file) {
+    const selectedFile = file;
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+        image.src = url;
+      });
+      const side = 80;
+      const canvas = document.createElement('canvas');
+      canvas.width = side;
+      canvas.height = side;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(image, 0, 0, side, side);
+      const pixels = context.getImageData(0, 0, side, side).data;
+      const colors = new Map();
+      for (let index = 0; index < pixels.length; index += 16) {
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        if (pixels[index + 3] < 180) continue;
+        const max = Math.max(red, green, blue);
+        const min = Math.min(red, green, blue);
+        const saturation = max ? (max - min) / max : 0;
+        const brightness = (red + green + blue) / 3;
+        if (saturation < 0.22 || brightness < 35 || brightness > 235) continue;
+        const key = `${Math.floor(red / 32)}-${Math.floor(green / 32)}-${Math.floor(blue / 32)}`;
+        const current = colors.get(key) || { weight: 0, red: 0, green: 0, blue: 0 };
+        const weight = saturation * (1 - Math.abs(brightness - 145) / 290);
+        current.weight += weight;
+        current.red += red * weight;
+        current.green += green * weight;
+        current.blue += blue * weight;
+        colors.set(key, current);
+      }
+      const dominant = [...colors.values()].sort((first, second) => second.weight - first.weight)[0];
+      if (!dominant || this.pendingImage !== selectedFile) return;
+      const toHex = (value) => Math.round(value / dominant.weight).toString(16).padStart(2, '0');
+      document.getElementById('new-color').value = `#${toHex(dominant.red)}${toHex(dominant.green)}${toHex(dominant.blue)}`;
+      this.updateColorPreview();
+    } catch {
+      // Conservar el color que el usuario ya eligió si el análisis falla.
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  disposeCropState() {
+    if (this.cropState?.sourceUrl) URL.revokeObjectURL(this.cropState.sourceUrl);
+    this.cropState = null;
   }
 }
 

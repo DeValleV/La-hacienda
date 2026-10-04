@@ -187,16 +187,36 @@
         <label>Existencias<input id="new-stock" required type="number" min="0" step="1"></label>
         <label>Stock mínimo<input id="new-min-stock" required type="number" min="0" step="1"></label>
         <div class="field-group">
-          <label for="open-color-palette">Color de la tarjeta</label>
+          <label for="open-color-palette">Color de respaldo</label>
           <input id="new-color" required type="hidden" value="#ff6600">
           <button id="open-color-palette" class="color-picker-trigger" type="button" aria-haspopup="dialog">
             <span class="color-preview" aria-hidden="true"></span>
             <span>Elegir color</span>
           </button>
         </div>
+        <div class="field-group full-width">
+          <label for="product-image-input">Imagen del producto <span class="field-optional">Opcional</span></label>
+          <input id="product-image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          <button id="product-image-dropzone" class="product-image-dropzone" type="button" aria-describedby="product-image-help">
+            <span class="product-image-preview" aria-hidden="true"></span>
+            <span><strong>Seleccionar imagen</strong><small id="product-image-help">o arrastra y suelta aquí · JPG, PNG o WebP · máximo 5 MB</small></span>
+          </button>
+          <button id="crop-product-image" class="secondary crop-product-image" type="button" hidden>▣ Ajustar área visible</button>
+        </div>
       </div>
       <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" id="save-product" type="button">Guardar producto</button></div>
     </form>
+  </dialog>
+  <dialog id="image-crop-dialog" class="image-crop-dialog" aria-labelledby="image-crop-title">
+    <div class="image-cropper">
+      <div class="dialog-head"><div><p class="eyebrow">RECORTE DE IMAGEN</p><h2 id="image-crop-title">Ajustar área visible</h2></div><button id="cancel-image-crop" type="button" aria-label="Cancelar recorte">×</button></div>
+      <p class="muted">Arrastra la imagen para encuadrarla. Usa el control para acercar o alejar.</p>
+      <div id="image-crop-viewport" class="image-crop-viewport" aria-label="Área que aparecerá en la tarjeta">
+        <img id="image-crop-source" alt="Vista previa para recortar">
+      </div>
+      <label class="crop-zoom-control" for="image-crop-zoom"><span>Zoom</span><input id="image-crop-zoom" type="range" min="0" max="100" value="0"></label>
+      <div class="dialog-actions"><button id="cancel-image-crop-secondary" class="secondary" type="button">Cancelar</button><button id="apply-image-crop" class="primary" type="button">Usar este recorte</button></div>
+    </div>
   </dialog>
   <dialog id="restock-dialog">
     <form method="dialog" novalidate>
@@ -224,7 +244,7 @@
     <form method="dialog" novalidate>
       <div class="dialog-head"><div><p class="eyebrow">PALETA DE LA TARJETA</p><h2 id="color-palette-title">Elige un color</h2></div><button type="button" data-dialog-close aria-label="Cerrar paleta">×</button></div>
       <div id="color-options" class="color-options" aria-label="40 opciones de color"></div>
-      <p class="muted">El color identificará la tarjeta de este producto en el punto de venta.</p>
+      <p class="muted">Este color se muestra cuando el producto no tiene imagen o ésta no puede cargarse.</p>
     </form>
   </dialog>
   <dialog id="history-calendar-dialog" class="history-calendar-dialog" aria-labelledby="history-calendar-title">
