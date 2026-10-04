@@ -539,9 +539,13 @@ async function createBootstrapAdmin(request, env) {
 
 async function listUsers(env, session) {
   const result = await env.DB.prepare(`
-    SELECT u.id, u.nombre AS name, u.nombre_usuario AS username, r.nombre AS role, u.activo AS active
-    FROM usuario u JOIN rol r ON r.id = u.rol_id WHERE u.sucursal_id = ? ORDER BY u.nombre
-  `).bind(session.branchId).all();
+    SELECT u.id, u.nombre AS name, u.nombre_usuario AS username, r.nombre AS role,
+           u.sucursal_id AS branchId, b.nombre AS branchName, u.activo AS active
+    FROM usuario u
+    JOIN rol r ON r.id = u.rol_id
+    JOIN sucursal b ON b.id = u.sucursal_id
+    ORDER BY u.nombre
+  `).all();
   return json({ users: result.results.map((user) => ({ ...user, active: Boolean(user.active) })) });
 }
 
@@ -550,26 +554,32 @@ async function createUser(request, env, session) {
   const roleName = requireText(payload.role, 'rol', 30).toLowerCase();
   const role = await env.DB.prepare('SELECT id FROM rol WHERE nombre = ?').bind(roleName).first();
   if (!role) throw new ApiError(400, 'Rol no válido.', 'VALIDATION_ERROR');
+  const branchId = requireInteger(payload.branchId, 'sucursal', 1);
+  const branch = await env.DB.prepare('SELECT id FROM sucursal WHERE id = ? AND activa = 1').bind(branchId).first();
+  if (!branch) throw new ApiError(404, 'Sucursal activa no encontrada.', 'NOT_FOUND');
   const passwordHash = await hashPassword(requirePassword(payload.password));
   const active = payload.active === false ? 0 : 1;
   const result = await env.DB.prepare('INSERT INTO usuario (rol_id, sucursal_id, nombre, nombre_usuario, password_hash, activo) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(role.id, session.branchId, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), passwordHash, active).run();
+    .bind(role.id, branchId, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), passwordHash, active).run();
   return json({ id: result.meta.last_row_id }, 201);
 }
 
 async function updateUser(request, env, session, userId) {
   const payload = await bodyJson(request);
-  const current = await env.DB.prepare('SELECT id FROM usuario WHERE id = ? AND sucursal_id = ?').bind(userId, session.branchId).first();
+  const current = await env.DB.prepare('SELECT id FROM usuario WHERE id = ?').bind(userId).first();
   if (!current) throw new ApiError(404, 'Usuario no encontrado.', 'NOT_FOUND');
   const role = await env.DB.prepare('SELECT id FROM rol WHERE nombre = ?').bind(requireText(payload.role, 'rol', 30).toLowerCase()).first();
   if (!role) throw new ApiError(400, 'Rol no válido.', 'VALIDATION_ERROR');
+  const branchId = requireInteger(payload.branchId, 'sucursal', 1);
+  const branch = await env.DB.prepare('SELECT id FROM sucursal WHERE id = ? AND activa = 1').bind(branchId).first();
+  if (!branch) throw new ApiError(404, 'Sucursal activa no encontrada.', 'NOT_FOUND');
   const active = payload.active === false ? 0 : 1;
   if (payload.password) {
-    await env.DB.prepare('UPDATE usuario SET rol_id = ?, nombre = ?, nombre_usuario = ?, activo = ?, password_hash = ? WHERE id = ? AND sucursal_id = ?')
-      .bind(role.id, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), active, await hashPassword(requirePassword(payload.password)), userId, session.branchId).run();
+    await env.DB.prepare('UPDATE usuario SET rol_id = ?, sucursal_id = ?, nombre = ?, nombre_usuario = ?, activo = ?, password_hash = ? WHERE id = ?')
+      .bind(role.id, branchId, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), active, await hashPassword(requirePassword(payload.password)), userId).run();
   } else {
-    await env.DB.prepare('UPDATE usuario SET rol_id = ?, nombre = ?, nombre_usuario = ?, activo = ? WHERE id = ? AND sucursal_id = ?')
-      .bind(role.id, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), active, userId, session.branchId).run();
+    await env.DB.prepare('UPDATE usuario SET rol_id = ?, sucursal_id = ?, nombre = ?, nombre_usuario = ?, activo = ? WHERE id = ?')
+      .bind(role.id, branchId, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), active, userId).run();
   }
   return json({ ok: true });
 }

@@ -126,35 +126,16 @@
         <button class="secondary" type="button" data-settings-tab="catalogs">Catálogos</button>
       </div>
       <section class="panel settings-panel active" data-settings-panel="users">
-        <form id="user-form" class="settings-form" novalidate>
-          <input id="user-id" type="hidden">
-          <label>Nombre<input id="user-name" required maxlength="120"></label>
-          <label>Usuario<input id="user-username" required maxlength="80"></label>
-          <label>Rol<select id="user-role"><option value="cajero">Cajero</option><option value="encargado">Encargado</option><option value="administrador">Administrador</option></select></label>
-          <label>Contraseña<input id="user-password" type="password" minlength="10" autocomplete="new-password"><small class="muted">Obligatoria para usuarios nuevos.</small></label>
-          <label class="settings-checkbox"><input id="user-active" type="checkbox" checked> Usuario activo</label>
-          <div class="actions"><button class="primary" type="submit">Guardar usuario</button><button id="cancel-user-edit" class="secondary" type="button" hidden>Cancelar</button></div>
-        </form>
-        <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th>USUARIO</th><th>ROL</th><th>ESTADO</th><th></th></tr></thead><tbody id="settings-users"></tbody></table></div>
+        <div class="panel-toolbar"><h2>Usuarios</h2><button id="new-user" class="primary" type="button">Nuevo usuario</button></div>
+        <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th>USUARIO</th><th>ROL</th><th>SUCURSAL</th><th>ESTADO</th><th></th></tr></thead><tbody id="settings-users"></tbody></table></div>
       </section>
       <section class="panel settings-panel" data-settings-panel="branches" hidden>
-        <form id="branch-form" class="settings-form" novalidate>
-          <input id="branch-id" type="hidden">
-          <label>Nombre<input id="branch-name" required maxlength="120"></label>
-          <label>Código<input id="branch-code" required maxlength="30"></label>
-          <label>Dirección<input id="branch-address" maxlength="240"></label>
-          <label class="settings-checkbox"><input id="branch-active" type="checkbox" checked> Sucursal activa</label>
-          <div class="actions"><button class="primary" type="submit">Guardar sucursal</button><button id="cancel-branch-edit" class="secondary" type="button" hidden>Cancelar</button></div>
-        </form>
+        <div class="panel-toolbar"><h2>Sucursales</h2><button id="new-branch" class="primary" type="button">Nueva sucursal</button></div>
         <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th>CÓDIGO</th><th>DIRECCIÓN</th><th>ESTADO</th><th></th></tr></thead><tbody id="settings-branches"></tbody></table></div>
       </section>
       <section class="panel settings-panel" data-settings-panel="catalogs" hidden>
-        <form id="catalog-form" class="settings-form compact" novalidate>
-          <label>Catálogo<select id="catalog-type"><option value="categories">Categorías</option><option value="brands">Marcas</option></select></label>
-          <label>Nombre<input id="catalog-name" required maxlength="80"></label>
-          <button class="primary" type="submit">Agregar</button>
-        </form>
-        <div id="settings-catalogs" class="catalog-list"></div>
+        <div class="panel-toolbar"><label>Catálogo<select id="catalog-type"><option value="categories">Categorías</option><option value="brands">Marcas</option></select></label><button id="new-catalog" class="primary" type="button">Nuevo elemento</button></div>
+        <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th></th></tr></thead><tbody id="settings-catalogs"></tbody></table></div>
       </section>
     </section>
 </main>
@@ -162,6 +143,38 @@
 
   
 
+  <dialog id="user-dialog">
+    <form id="user-form" novalidate>
+      <div class="dialog-head"><h2 id="user-dialog-title">Nuevo usuario</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
+      <input id="user-id" type="hidden">
+      <label>Nombre<input id="user-name" required maxlength="120"></label>
+      <label>Usuario<input id="user-username" required maxlength="80"></label>
+      <label>Rol<select id="user-role"><option value="cajero">Cajero</option><option value="encargado">Encargado</option><option value="administrador">Administrador</option></select></label>
+      <label>Sucursal<select id="user-branch" required></select></label>
+      <label>Contraseña<input id="user-password" type="password" minlength="10" autocomplete="new-password"><small class="muted">Obligatoria para usuarios nuevos.</small></label>
+      <label class="settings-checkbox"><input id="user-active" type="checkbox" checked> Usuario activo</label>
+      <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" type="submit">Guardar usuario</button></div>
+    </form>
+  </dialog>
+  <dialog id="branch-dialog">
+    <form id="branch-form" novalidate>
+      <div class="dialog-head"><h2 id="branch-dialog-title">Nueva sucursal</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
+      <input id="branch-id" type="hidden">
+      <label>Nombre<input id="branch-name" required maxlength="120"></label>
+      <label>Código<input id="branch-code" required maxlength="30"></label>
+      <label>Dirección<input id="branch-address" maxlength="240"></label>
+      <label class="settings-checkbox"><input id="branch-active" type="checkbox" checked> Sucursal activa</label>
+      <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" type="submit">Guardar sucursal</button></div>
+    </form>
+  </dialog>
+  <dialog id="catalog-dialog">
+    <form id="catalog-form" novalidate>
+      <div class="dialog-head"><h2 id="catalog-dialog-title">Nuevo elemento</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
+      <input id="catalog-id" type="hidden">
+      <label>Nombre<input id="catalog-name" required maxlength="80"></label>
+      <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" type="submit">Guardar</button></div>
+    </form>
+  </dialog>
   <dialog id="product-dialog">
     <form method="dialog" novalidate>
       <div class="dialog-head"><h2>Nuevo producto</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
