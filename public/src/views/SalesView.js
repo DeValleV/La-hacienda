@@ -106,7 +106,7 @@ class SalesView {
         ${image}
         <h3>${escapeHtml(product.name)}</h3>
         <footer>
-          <small>${availableStock} disponibles</small>
+          <small>STK ${availableStock}</small>
           <strong>${this.formatMoney(product.price)}</strong>
         </footer>
       </article>`;

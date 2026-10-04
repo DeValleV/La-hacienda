@@ -6,6 +6,8 @@ const formatMoney = (amount) => new Intl.NumberFormat('es-MX', {
 
 class PointOfSaleApp {
   constructor() {
+    this.syncTouchTabletLayout();
+    window.addEventListener('resize', () => this.syncTouchTabletLayout());
     this.api = new ApiClient();
     this.currentSession = null;
     this.currentShift = null;
@@ -47,6 +49,14 @@ class PointOfSaleApp {
     document.getElementById('export-inventory').onclick = () => this.exportInventory();
     this.renderAll();
     this.initialize();
+  }
+
+  // Algunos simuladores sólo cambian el viewport y no exponen `any-pointer: coarse`.
+  // Esta clase conserva el diseño tablet para navegadores Android/iPad reales y emulados.
+  syncTouchTabletLayout() {
+    const touchDevice = navigator.maxTouchPoints > 0 || /Android|iPad|Tablet/i.test(navigator.userAgent);
+    const tabletWidth = window.innerWidth >= 701 && window.innerWidth <= 1920;
+    document.documentElement.classList.toggle('touch-tablet', touchDevice && tabletWidth);
   }
 
   async initialize() {
