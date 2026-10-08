@@ -1807,6 +1807,10 @@ dialog::backdrop {
 .login-submit { width: 100%; padding: 12px; }
 .login-error { margin: 0; color: var(--danger); font-weight: 700; }
 .login-help { margin: 0; font-size: 12px; }
+.install-help { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.install-help summary { cursor: pointer; color: var(--blue); font-weight: 800; }
+.install-help p { margin: 8px 0 0; }
+.install-help strong { color: var(--navy); }
 .logout-button { width: 100%; margin-top: 8px; padding: 9px 10px; text-align: left; border-top: 1px solid #ead8d1; color: var(--danger); font-weight: 700; }
 .offline-mode-button { width: 100%; padding: 4px 0; text-align: left; color: var(--blue); font-size: 12px; font-weight: 800; }
 .session-user {
