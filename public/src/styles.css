@@ -1726,6 +1726,7 @@ dialog::backdrop {
 
 .connection-status > span:first-child { color: #ffd166; }
 .connection-status.is-online > span:first-child { color: #7ce3a5; }
+.connection-status[hidden] { display: none; }
 .slow-connection {
   position: fixed;
   z-index: 45;

@@ -205,7 +205,12 @@ class PointOfSaleApp {
     name.textContent = user.username;
     const details = document.createElement('span');
     details.textContent = `${user.name} · ${user.role} · ${user.branchName}`;
-    sessionUser.replaceChildren(name, details, document.getElementById('logout'));
+    sessionUser.replaceChildren(
+      name,
+      details,
+      document.getElementById('activate-offline-mode-sidebar'),
+      document.getElementById('logout'),
+    );
     this.applyPermissions();
     try {
       const [{ shift }, catalogs] = await Promise.all([
