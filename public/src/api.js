@@ -16,6 +16,8 @@ const FRIENDLY_API_ERRORS = {
   INVALID_IMAGE: 'Use una imagen JPG, PNG o WebP válida.',
   IMAGE_STORAGE_UNAVAILABLE: 'El almacenamiento de imágenes aún no está configurado.',
 };
+const SLOW_CONNECTION_MS = 10_000;
+let slowRequestCount = 0;
 
 function friendlyError(payload, status) {
   const code = payload.error?.code;
@@ -27,6 +29,12 @@ function friendlyError(payload, status) {
 class ApiClient {
   async request(path, options = {}) {
     let response;
+    let isSlow = false;
+    const slowConnectionTimer = setTimeout(() => {
+      isSlow = true;
+      slowRequestCount += 1;
+      window.dispatchEvent(new CustomEvent('connection:slow'));
+    }, SLOW_CONNECTION_MS);
     try {
       response = await fetch(path, {
         credentials: 'same-origin',
@@ -37,6 +45,12 @@ class ApiClient {
       const error = new Error('No se pudo conectar con el sistema. Revise su conexión e inténtelo de nuevo.');
       error.code = 'NETWORK_ERROR';
       throw error;
+    } finally {
+      clearTimeout(slowConnectionTimer);
+      if (isSlow) {
+        slowRequestCount -= 1;
+        if (!slowRequestCount) window.dispatchEvent(new CustomEvent('connection:responsive'));
+      }
     }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {

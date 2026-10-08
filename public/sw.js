@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'la-hacienda-shell-v1';
+const CACHE_VERSION = 'la-hacienda-shell-v3';
 const APP_SHELL = [
   '/', '/index.html', '/offline.html', '/manifest.webmanifest', '/icons/app-icon.svg',
   '/src/styles.css', '/src/inventory.css', '/src/sales-summary.css',

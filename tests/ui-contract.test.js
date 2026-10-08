@@ -48,6 +48,9 @@ test('los diálogos pueden cerrarse sin enviar formularios y la reposición ráp
 test('la aplicación declara los recursos requeridos para la instalación PWA', () => {
   assert.match(html, /rel="manifest" href="\/manifest\.webmanifest"/);
   assert.match(html, /id="offline-screen"/);
+  assert.match(html, /id="slow-connection"/);
+  assert.match(html, /id="activate-offline-mode"/);
   assert.match(html, /id="update-available"/);
   assert.match(scripts, /serviceWorker\.register\('\/sw\.js'\)/);
+  assert.doesNotMatch(scripts, /navigator\.onLine/);
 });

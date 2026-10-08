@@ -1726,6 +1726,25 @@ dialog::backdrop {
 
 .connection-status > span:first-child { color: #ffd166; }
 .connection-status.is-online > span:first-child { color: #7ce3a5; }
+.slow-connection {
+  position: fixed;
+  z-index: 45;
+  top: 18px;
+  left: 50%;
+  display: grid;
+  gap: 7px;
+  width: min(460px, calc(100% - 32px));
+  padding: 15px;
+  border: 1px solid #f0c36d;
+  border-radius: 9px;
+  background: #fffaf0;
+  box-shadow: 0 12px 30px rgba(0,0,0,.16);
+  transform: translateX(-50%);
+}
+.slow-connection[hidden] { display: none; }
+.slow-connection span { color: var(--muted); font-size: 13px; }
+.slow-connection div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; }
+.slow-connection .primary, .slow-connection .secondary { padding: 8px 10px; }
 .offline-screen {
   position: fixed;
   z-index: 30;
@@ -1789,6 +1808,7 @@ dialog::backdrop {
 .login-error { margin: 0; color: var(--danger); font-weight: 700; }
 .login-help { margin: 0; font-size: 12px; }
 .logout-button { width: 100%; margin-top: 8px; padding: 9px 10px; text-align: left; border-top: 1px solid #ead8d1; color: var(--danger); font-weight: 700; }
+.offline-mode-button { width: 100%; padding: 4px 0; text-align: left; color: var(--blue); font-size: 12px; font-weight: 800; }
 .session-user {
   display: grid;
   gap: 4px;

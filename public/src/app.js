@@ -8,9 +8,12 @@ class PointOfSaleApp {
   constructor() {
     this.syncTouchTabletLayout();
     window.addEventListener('resize', () => this.syncTouchTabletLayout());
-    window.addEventListener('online', () => this.handleConnectionChange(true));
-    window.addEventListener('offline', () => this.handleConnectionChange(false));
+    window.addEventListener('online', () => this.handleConnectionChange());
+    window.addEventListener('offline', () => this.handleConnectionChange());
+    window.addEventListener('connection:slow', () => this.showSlowConnection());
+    window.addEventListener('connection:responsive', () => this.hideSlowConnection());
     this.api = new ApiClient();
+    this.offlineModeRequested = false;
     this.currentSession = null;
     this.currentShift = null;
     this.inventory = new InventoryView({
@@ -48,6 +51,9 @@ class PointOfSaleApp {
     this.bindDialogs();
     this.bindLogin();
     document.getElementById('retry-connection').addEventListener('click', () => this.retryConnection());
+    document.getElementById('keep-waiting').addEventListener('click', () => this.hideSlowConnection());
+    document.getElementById('activate-offline-mode').addEventListener('click', () => this.activateOfflineMode());
+    document.getElementById('activate-offline-mode-sidebar').addEventListener('click', () => this.activateOfflineMode());
     document.getElementById('logout').onclick = () => this.logout();
     document.getElementById('export-inventory').onclick = () => this.exportInventory();
     this.renderAll();
@@ -63,13 +69,12 @@ class PointOfSaleApp {
   }
 
   async initialize() {
-    if (!navigator.onLine) {
-      this.showOffline();
-      return;
-    }
+    if (this.offlineModeRequested) return;
     try {
       await this.loadBranches();
+      if (this.offlineModeRequested) return;
       const { user } = await this.api.getSession();
+      if (this.offlineModeRequested) return;
       await this.startSession(user);
     } catch (error) {
       if (error.code === 'NETWORK_ERROR') {
@@ -100,13 +105,18 @@ class PointOfSaleApp {
     }
   }
 
-  handleConnectionChange(online) {
+  async handleConnectionChange() {
+    try {
+      // Browser connection events are hints only. A response such as 401 still
+      // proves that the Worker is reachable, so only a failed fetch means offline.
+      await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
+    } catch {
+      this.showOffline();
+      return;
+    }
     const status = document.getElementById('connection-status');
-    document.getElementById('connection-status-text').textContent = online ? 'Conexión restablecida' : 'Sin conexión';
-    status.classList.toggle('is-online', online);
-    status.hidden = online;
-    if (online && !document.getElementById('offline-screen').hidden) this.initialize();
-    if (!online) this.showOffline();
+    status.hidden = true;
+    if (!this.offlineModeRequested && !document.getElementById('offline-screen').hidden) this.initialize();
   }
 
   async retryConnection() {
@@ -114,6 +124,8 @@ class PointOfSaleApp {
     button.disabled = true;
     button.textContent = 'Comprobando conexión…';
     try {
+      this.offlineModeRequested = false;
+      this.hideSlowConnection();
       await this.initialize();
     } finally {
       button.disabled = false;
@@ -122,6 +134,7 @@ class PointOfSaleApp {
   }
 
   showOffline() {
+    this.hideSlowConnection();
     document.getElementById('app-shell').hidden = true;
     document.getElementById('login-screen').hidden = true;
     document.getElementById('offline-screen').hidden = false;
@@ -129,6 +142,23 @@ class PointOfSaleApp {
     status.hidden = false;
     status.classList.remove('is-online');
     document.getElementById('connection-status-text').textContent = 'Sin conexión';
+  }
+
+  showSlowConnection() {
+    if (document.getElementById('offline-screen').hidden) {
+      document.getElementById('slow-connection').hidden = false;
+    }
+  }
+
+  hideSlowConnection() {
+    document.getElementById('slow-connection').hidden = true;
+  }
+
+  activateOfflineMode() {
+    this.offlineModeRequested = true;
+    document.getElementById('offline-title').textContent = 'Modo sin conexión activado';
+    document.getElementById('offline-description').textContent = 'Hasta que implementemos el Hito 2, las ventas sólo se pueden registrar con conexión. Use Reintentar conexión cuando la señal mejore.';
+    this.showOffline();
   }
 
   bindLogin() {
@@ -201,6 +231,9 @@ class PointOfSaleApp {
   }
 
   showLogin() {
+    this.offlineModeRequested = false;
+    document.getElementById('offline-title').textContent = 'No hay conexión a Internet';
+    document.getElementById('offline-description').textContent = 'La aplicación está instalada y lista, pero necesita conexión para iniciar sesión y operar. Las ventas sin conexión estarán disponibles en una próxima actualización.';
     document.getElementById('offline-screen').hidden = true;
     document.getElementById('login-screen').hidden = false;
     document.getElementById('app-shell').hidden = true;
