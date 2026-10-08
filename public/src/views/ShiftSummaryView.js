@@ -13,11 +13,16 @@ class ShiftSummaryView {
     this.showToast = showToast;
     this.onToggleShift = onToggleShift;
     this.shift = null;
+    this.canClose = false;
     document.getElementById('close-shift').onclick = () => this.onToggleShift();
   }
 
   setShift(shift) {
     this.shift = shift;
+  }
+
+  setCanClose(canClose) {
+    this.canClose = canClose;
   }
 
   getSalesByType() {
@@ -64,6 +69,9 @@ class ShiftSummaryView {
     document.getElementById('sales-report').innerHTML = this.renderSalesReport(salesByType);
     const button = document.getElementById('close-shift');
     const isOpen = this.shift?.status === 'abierto';
+    const mayToggle = !isOpen || this.canClose;
+    button.hidden = !mayToggle;
+    button.disabled = !mayToggle;
     button.textContent = isOpen ? '✓ Finalizar turno' : '＋ Iniciar turno';
     button.classList.toggle('shift-action-start', !isOpen);
     button.classList.toggle('shift-action-close', isOpen);

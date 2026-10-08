@@ -306,7 +306,8 @@ async function currentShift(env, session) {
 }
 
 async function openShift(env, session) {
-  requireSession(session, PRODUCT_ROLES);
+  // Any authenticated user in the branch can start its shared shift.
+  requireSession(session);
   const existing = await env.DB.prepare("SELECT id FROM turno WHERE sucursal_id = ? AND estado = 'abierto'").bind(session.branchId).first();
   if (existing) throw new ApiError(409, 'Ya existe un turno abierto.', 'SHIFT_ALREADY_OPEN');
   const result = await env.DB.prepare('INSERT INTO turno (sucursal_id, abierto_por_usuario_id) VALUES (?, ?)').bind(session.branchId, session.userId).run();

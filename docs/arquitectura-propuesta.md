@@ -69,7 +69,7 @@ La interfaz ya no contiene credenciales de demostración. El primer administrado
 | `GET /api/sales?date=AAAA-MM-DD` | Cajero, encargado, administrador | Historial de sólo lectura de un día; incluye todos los turnos visibles de la sucursal. El cajero ve únicamente sus ventas y los demás roles ven su sucursal. |
 | `GET /api/sales/months` y `GET /api/sales/days?month=AAAA-MM` | Cajero, encargado, administrador | Devuelven los meses y días con ventas visibles para el calendario; los días sin ventas no se pueden seleccionar. |
 | `GET /api/shifts/current` | Autenticado | Consulta el turno abierto de la sucursal. |
-| `POST /api/shifts/open` | Encargado, administrador | Abre el turno de la sucursal. |
+| `POST /api/shifts/open` | Cajero, encargado, administrador | Abre el turno de la sucursal. |
 | `POST /api/shifts/current/close` | Encargado, administrador | Cierra el turno abierto. |
 | `POST/PATCH /api/products` | Encargado, administrador | Crea y modifica productos de la sucursal. |
 | `POST /api/products/:id/restock` | Encargado, administrador | Aumenta existencias de un producto de la sucursal. |

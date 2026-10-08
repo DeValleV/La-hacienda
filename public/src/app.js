@@ -185,15 +185,17 @@ class PointOfSaleApp {
 
   applyPermissions() {
     const canManageInventory = ['administrador', 'encargado'].includes(this.currentSession.role);
+    const canCloseShift = ['administrador', 'encargado'].includes(this.currentSession.role);
     const isAdmin = this.currentSession.role === 'administrador';
     const inventoryButton = document.querySelector('[data-view="inventario"]');
     const summaryButton = document.querySelector('[data-view="resumen"]');
     const settingsButton = document.querySelector('[data-view="configuracion"]');
     inventoryButton.hidden = !canManageInventory;
-    summaryButton.hidden = !canManageInventory;
+    summaryButton.hidden = false;
     settingsButton.hidden = !isAdmin;
     document.getElementById('add-product').hidden = !canManageInventory;
     document.getElementById('bulk-restock').hidden = !canManageInventory;
+    this.shiftSummary.setCanClose(canCloseShift);
   }
 
   async refreshData() {
@@ -252,6 +254,7 @@ class PointOfSaleApp {
     button.disabled = true;
     try {
       if (this.currentShift?.status === 'abierto') {
+        if (!['administrador', 'encargado'].includes(this.currentSession.role)) return;
         if (!(await this.confirmCloseShift())) return;
         this.currentShift = (await this.api.closeShift()).shift;
         this.sales.clearCart();

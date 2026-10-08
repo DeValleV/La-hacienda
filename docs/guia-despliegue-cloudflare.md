@@ -203,7 +203,7 @@ Después inicia sesión y completa la validación de staging.
 Antes de producción, realiza esta lista con cuentas reales de prueba:
 
 - Login correcto y rechazo de contraseña o sucursal incorrectas.
-- Un cajero no ve Inventario, Cierres ni Configuración y sólo consulta sus ventas.
+- Un cajero no ve Inventario ni Configuración, sólo consulta sus ventas y puede iniciar el turno de su sucursal.
 - Un encargado puede administrar productos y turnos, pero no usuarios ni sucursales.
 - Una venta descuenta stock, guarda nombre/precio histórico y aparece en el historial.
 - No se puede cobrar sin turno abierto ni abrir dos turnos en la misma sucursal.
