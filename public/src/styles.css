@@ -1707,6 +1707,68 @@ dialog::backdrop {
 
 .login-screen[hidden] { display: none; }
 
+.connection-status {
+  position: fixed;
+  z-index: 40;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: #3d3027;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+}
+
+.connection-status > span:first-child { color: #ffd166; }
+.connection-status.is-online > span:first-child { color: #7ce3a5; }
+.offline-screen {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #fff7f0, #f5f5f5);
+}
+.offline-screen[hidden] { display: none; }
+.offline-card {
+  width: min(100%, 440px);
+  padding: 36px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  text-align: center;
+  box-shadow: 0 18px 45px rgba(0,0,0,.1);
+}
+.offline-card h1 { font-size: 27px; }
+.offline-card > p:not(.eyebrow) { color: var(--muted); line-height: 1.55; }
+.offline-icon { margin-bottom: 14px; color: var(--blue); font-size: 48px; line-height: 1; }
+.offline-card .primary { margin-top: 8px; }
+.offline-help { font-size: 12px; }
+.update-available {
+  position: fixed;
+  z-index: 35;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100% - 40px);
+  padding: 12px 14px;
+  border: 1px solid #e3d9cf;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(0,0,0,.16);
+  font-weight: 700;
+}
+.update-available[hidden] { display: none; }
+.update-available .secondary { padding: 8px 11px; color: var(--blue); }
+
 .login-card {
   width: min(100%, 420px);
   display: grid;

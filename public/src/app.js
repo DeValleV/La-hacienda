@@ -8,6 +8,8 @@ class PointOfSaleApp {
   constructor() {
     this.syncTouchTabletLayout();
     window.addEventListener('resize', () => this.syncTouchTabletLayout());
+    window.addEventListener('online', () => this.handleConnectionChange(true));
+    window.addEventListener('offline', () => this.handleConnectionChange(false));
     this.api = new ApiClient();
     this.currentSession = null;
     this.currentShift = null;
@@ -45,6 +47,7 @@ class PointOfSaleApp {
     this.bindSidebarToggle();
     this.bindDialogs();
     this.bindLogin();
+    document.getElementById('retry-connection').addEventListener('click', () => this.retryConnection());
     document.getElementById('logout').onclick = () => this.logout();
     document.getElementById('export-inventory').onclick = () => this.exportInventory();
     this.renderAll();
@@ -60,11 +63,19 @@ class PointOfSaleApp {
   }
 
   async initialize() {
-    await this.loadBranches();
+    if (!navigator.onLine) {
+      this.showOffline();
+      return;
+    }
     try {
+      await this.loadBranches();
       const { user } = await this.api.getSession();
       await this.startSession(user);
     } catch (error) {
+      if (error.code === 'NETWORK_ERROR') {
+        this.showOffline();
+        return;
+      }
       if (error.status !== 401) this.showLoginError(error.message);
       this.showLogin();
     }
@@ -85,7 +96,39 @@ class PointOfSaleApp {
     } catch (error) {
       select.replaceChildren(new Option('No se pudieron cargar', ''));
       this.showLoginError(error.message);
+      throw error;
     }
+  }
+
+  handleConnectionChange(online) {
+    const status = document.getElementById('connection-status');
+    document.getElementById('connection-status-text').textContent = online ? 'Conexión restablecida' : 'Sin conexión';
+    status.classList.toggle('is-online', online);
+    status.hidden = online;
+    if (online && !document.getElementById('offline-screen').hidden) this.initialize();
+    if (!online) this.showOffline();
+  }
+
+  async retryConnection() {
+    const button = document.getElementById('retry-connection');
+    button.disabled = true;
+    button.textContent = 'Comprobando conexión…';
+    try {
+      await this.initialize();
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Reintentar conexión';
+    }
+  }
+
+  showOffline() {
+    document.getElementById('app-shell').hidden = true;
+    document.getElementById('login-screen').hidden = true;
+    document.getElementById('offline-screen').hidden = false;
+    const status = document.getElementById('connection-status');
+    status.hidden = false;
+    status.classList.remove('is-online');
+    document.getElementById('connection-status-text').textContent = 'Sin conexión';
   }
 
   bindLogin() {
@@ -124,6 +167,7 @@ class PointOfSaleApp {
     this.setLoading(true);
     this.currentSession = user;
     this.history.reset();
+    document.getElementById('offline-screen').hidden = true;
     document.getElementById('login-screen').hidden = true;
     document.getElementById('app-shell').hidden = false;
     const sessionUser = document.getElementById('session-user');
@@ -157,6 +201,7 @@ class PointOfSaleApp {
   }
 
   showLogin() {
+    document.getElementById('offline-screen').hidden = true;
     document.getElementById('login-screen').hidden = false;
     document.getElementById('app-shell').hidden = true;
     document.getElementById('login-username').focus();

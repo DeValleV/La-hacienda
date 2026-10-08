@@ -3,12 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ff6600">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/app-icon.svg">
   <title>Gestión La Hacienda | Comedor Industrial</title>
   <link rel="stylesheet" href="src/styles.css">
   <link rel="stylesheet" href="src/inventory.css">
   <link rel="stylesheet" href="src/sales-summary.css">
 </head>
 <body>
+  <aside id="connection-status" class="connection-status" role="status" hidden>
+    <span aria-hidden="true">●</span><span id="connection-status-text">Sin conexión</span>
+  </aside>
+  <section id="offline-screen" class="offline-screen" aria-labelledby="offline-title" hidden>
+    <div class="offline-card">
+      <div class="offline-icon" aria-hidden="true">⌁</div>
+      <p class="eyebrow">MODO SIN CONEXIÓN</p>
+      <h1 id="offline-title">No hay conexión a Internet</h1>
+      <p>La aplicación está instalada y lista, pero necesita conexión para iniciar sesión y operar. Las ventas sin conexión estarán disponibles en una próxima actualización.</p>
+      <button id="retry-connection" class="primary" type="button">Reintentar conexión</button>
+      <p class="offline-help">Cuando se restablezca la señal, la aplicación continuará automáticamente.</p>
+    </div>
+  </section>
+  <aside id="update-available" class="update-available" role="status" hidden>
+    <span>Hay una actualización lista para instalar.</span>
+    <button id="apply-update" class="secondary" type="button">Actualizar</button>
+  </aside>
   <section id="login-screen" class="login-screen" aria-labelledby="login-title">
     <form id="login-form" class="login-card" novalidate>
       <div class="login-brand"><strong>Gestión La Hacienda</strong><span>Comedor industrial</span></div>
@@ -286,5 +309,6 @@
   <script src="src/views/HistoryView.js"></script>
   <script src="src/views/SettingsView.js"></script>
   <script src="src/app.js"></script>
+  <script src="src/pwa.js"></script>
 </body>
 </html>
