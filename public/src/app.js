@@ -473,17 +473,59 @@ class PointOfSaleApp {
 
   bindSidebarToggle() {
     const toggle = document.getElementById('toggle-sidebar');
-    toggle.addEventListener('click', () => {
+    const backdrop = document.getElementById('mobile-menu-backdrop');
+    let lastTouchToggle = 0;
+    const toggleSidebar = () => {
+      if (window.matchMedia('(max-width: 700px)').matches) {
+        this.setMobileSidebarOpen(!document.body.classList.contains('mobile-sidebar-open'));
+        return;
+      }
       const isHidden = document.body.classList.toggle('sidebar-hidden');
       toggle.setAttribute('aria-expanded', String(!isHidden));
       toggle.setAttribute('aria-label', isHidden ? 'Mostrar menú lateral' : 'Ocultar menú lateral');
+    };
+
+    // Los navegadores móviles disparan pointerup de forma más consistente que click
+    // cuando el botón está cerca del borde superior o de la zona segura.
+    toggle.addEventListener('pointerup', (event) => {
+      if (event.pointerType === 'mouse') return;
+      event.preventDefault();
+      lastTouchToggle = Date.now();
+      toggleSidebar();
     });
+    toggle.addEventListener('click', () => {
+      if (Date.now() - lastTouchToggle < 600) return;
+      toggleSidebar();
+    });
+
+    backdrop.addEventListener('click', () => {
+      if (Date.now() - (this.mobileSidebarOpenedAt || 0) < 650) return;
+      this.setMobileSidebarOpen(false);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || !document.body.classList.contains('mobile-sidebar-open')) return;
+      this.setMobileSidebarOpen(false);
+      toggle.focus();
+    });
+  }
+
+  setMobileSidebarOpen(isOpen) {
+    if (isOpen) this.mobileSidebarOpenedAt = Date.now();
+    document.body.classList.toggle('mobile-sidebar-open', isOpen);
+    const toggle = document.getElementById('toggle-sidebar');
+    toggle.setAttribute('aria-expanded', String(isOpen));
+    toggle.setAttribute('aria-label', isOpen ? 'Cerrar menú lateral' : 'Abrir menú lateral');
+    document.getElementById('mobile-menu-backdrop').hidden = !isOpen;
   }
 
   showView(viewId) {
     document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === viewId));
     document.querySelectorAll('[data-view]').forEach((button) => button.classList.toggle('active', button.dataset.view === viewId));
     document.getElementById('sales-header').hidden = viewId !== 'ventas';
+    if (window.matchMedia('(max-width: 700px)').matches) {
+      this.setMobileSidebarOpen(false);
+    }
   }
 
   showToast(message) {
