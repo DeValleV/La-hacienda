@@ -1,8 +1,8 @@
-const CACHE_VERSION = 'la-hacienda-shell-v5';
+const CACHE_VERSION = 'la-hacienda-shell-v7';
 const APP_SHELL = [
   '/', '/index.html', '/offline.html', '/manifest.webmanifest', '/icons/app-icon.svg',
   '/src/styles.css', '/src/inventory.css', '/src/sales-summary.css',
-  '/src/excel.js', '/src/api.js', '/src/app.js', '/src/pwa.js',
+  '/src/excel.js', '/src/api.js', '/src/offline.js', '/src/app.js', '/src/pwa.js',
   '/src/views/InventoryView.js', '/src/views/SalesView.js', '/src/views/ShiftSummaryView.js',
   '/src/views/HistoryView.js', '/src/views/SettingsView.js',
 ];
@@ -43,5 +43,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(appShell(request));
     return;
   }
-  event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+  // Red primero para que una actualización publicada no quede escondida detrás
+  // de una versión antigua del shell; la caché sigue siendo el respaldo offline.
+  event.respondWith(appShell(request));
 });

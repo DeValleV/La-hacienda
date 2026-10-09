@@ -64,6 +64,8 @@ class ApiClient {
 
   getBranches() { return this.request('/api/auth/branches'); }
   getSession() { return this.request('/api/me'); }
+  getOfflineBootstrap() { return this.request('/api/offline/bootstrap'); }
+  syncOffline(operations) { return this.request('/api/offline/sync', { method: 'POST', body: JSON.stringify({ operations }) }); }
   login(credentials) { return this.request('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) }); }
   logout() { return this.request('/api/auth/logout', { method: 'POST', body: '{}' }); }
   getProducts() { return this.request('/api/products'); }

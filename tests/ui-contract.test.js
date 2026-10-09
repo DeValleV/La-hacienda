@@ -6,6 +6,7 @@ const root = new URL('../', import.meta.url);
 const html = readFileSync(new URL('public/index.html', root), 'utf8');
 const scripts = [
   'public/src/app.js',
+  'public/src/offline.js',
   'public/src/pwa.js',
   'public/src/views/InventoryView.js',
   'public/src/views/SalesView.js',
@@ -51,6 +52,7 @@ test('la aplicación declara los recursos requeridos para la instalación PWA', 
   assert.match(html, /id="slow-connection"/);
   assert.match(html, /id="activate-offline-mode"/);
   assert.match(scripts, /activate-offline-mode-sidebar/);
+  assert.match(scripts, /class OfflineStore/);
   assert.match(html, /id="update-available"/);
   assert.match(html, /Instalar aplicación en esta tablet/);
   assert.match(scripts, /serviceWorker\.register\('\/sw\.js'\)/);

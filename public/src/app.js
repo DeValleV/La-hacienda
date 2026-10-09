@@ -13,7 +13,10 @@ class PointOfSaleApp {
     window.addEventListener('connection:slow', () => this.showSlowConnection());
     window.addEventListener('connection:responsive', () => this.hideSlowConnection());
     this.api = new ApiClient();
+    this.offlineStore = new OfflineStore();
     this.offlineModeRequested = false;
+    this.offlineMode = false;
+    this.syncingOffline = false;
     this.currentSession = null;
     this.currentShift = null;
     this.inventory = new InventoryView({
@@ -56,6 +59,15 @@ class PointOfSaleApp {
     document.getElementById('activate-offline-mode-sidebar').addEventListener('click', () => this.activateOfflineMode());
     document.getElementById('logout').onclick = () => this.logout();
     document.getElementById('export-inventory').onclick = () => this.exportInventory();
+    // Algunos navegadores móviles no emiten `online` de forma consistente al
+    // volver de una zona sin señal. Esta comprobación ligera cubre ese caso y
+    // también permite salir del modo manual sin recargar la aplicación.
+    setInterval(() => {
+      if (this.offlineMode) this.handleConnectionChange();
+    }, 30_000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && this.offlineMode) this.handleConnectionChange();
+    });
     this.renderAll();
     this.initialize();
   }
@@ -78,7 +90,12 @@ class PointOfSaleApp {
       await this.startSession(user);
     } catch (error) {
       if (error.code === 'NETWORK_ERROR') {
-        this.showOffline();
+        const snapshot = await this.offlineStore.snapshot();
+        if (snapshot?.users?.length) {
+          this.populateOfflineBranch(snapshot);
+          this.showLogin();
+        }
+        else this.showOffline();
         return;
       }
       if (error.status !== 401) this.showLoginError(error.message);
@@ -105,17 +122,25 @@ class PointOfSaleApp {
     }
   }
 
+  populateOfflineBranch(snapshot) {
+    const select = document.getElementById('login-branch');
+    select.replaceChildren(new Option(snapshot.branchName || 'Sucursal guardada', String(snapshot.branchId)));
+    select.disabled = false;
+  }
+
   async handleConnectionChange() {
     try {
       // Browser connection events are hints only. A response such as 401 still
       // proves that the Worker is reachable, so only a failed fetch means offline.
       await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
     } catch {
-      this.showOffline();
+      if (this.currentSession) this.enableOfflineMode();
+      else this.showOffline();
       return;
     }
     const status = document.getElementById('connection-status');
     status.hidden = true;
+    if (this.offlineMode) await this.syncOfflineOperations();
     if (!this.offlineModeRequested && !document.getElementById('offline-screen').hidden) this.initialize();
   }
 
@@ -156,8 +181,12 @@ class PointOfSaleApp {
 
   activateOfflineMode() {
     this.offlineModeRequested = true;
+    if (this.currentSession) {
+      this.enableOfflineMode();
+      return;
+    }
     document.getElementById('offline-title').textContent = 'Modo sin conexión activado';
-    document.getElementById('offline-description').textContent = 'Hasta que implementemos el Hito 2, las ventas sólo se pueden registrar con conexión. Use Reintentar conexión cuando la señal mejore.';
+    document.getElementById('offline-description').textContent = 'Las operaciones se guardarán en este dispositivo y se sincronizarán al recuperar la conexión.';
     this.showOffline();
   }
 
@@ -185,6 +214,7 @@ class PointOfSaleApp {
         await this.startSession(user);
         this.showToast(`Sesión iniciada: ${user.name}.`);
       } catch (error) {
+        if (error.code === 'NETWORK_ERROR' && await this.loginOffline({ branchId, username, password })) return;
         this.showLogin();
         this.showLoginError(error.message);
       } finally {
@@ -223,7 +253,23 @@ class PointOfSaleApp {
       this.syncShiftUi();
       await Promise.all([this.refreshData(), this.loadHistory()]);
       if (user.role === 'administrador') await this.settings.load();
+      // La sesión en línea no debe fallar sólo porque se perdió la conexión al
+      // momento de actualizar la copia offline.
+      try {
+        const { snapshot } = await this.api.getOfflineBootstrap();
+        await this.offlineStore.saveSnapshot(snapshot);
+      } catch (error) {
+        console.warn('No se pudo actualizar la copia offline.', error);
+      }
+      this.offlineMode = false;
+      this.updateOfflineStatus();
       this.showView('ventas');
+      // Una cuenta distinta no debe enviar operaciones capturadas por otro
+      // usuario. Las suyas se intentan al volver a autenticarse en línea.
+      if ((await this.offlineStore.pendingForUser(user.userId)).length) {
+        this.offlineMode = true;
+        await this.syncOfflineOperations();
+      }
     } catch (error) {
       this.currentSession = null;
       this.currentShift = null;
@@ -238,11 +284,56 @@ class PointOfSaleApp {
   showLogin() {
     this.offlineModeRequested = false;
     document.getElementById('offline-title').textContent = 'No hay conexión a Internet';
-    document.getElementById('offline-description').textContent = 'La aplicación está instalada y lista, pero necesita conexión para iniciar sesión y operar. Las ventas sin conexión estarán disponibles en una próxima actualización.';
+    document.getElementById('offline-description').textContent = 'Inicia sesión con una cuenta que ya se haya usado en este dispositivo. Las ventas, reposiciones y turnos se guardarán aquí hasta recuperar la conexión.';
     document.getElementById('offline-screen').hidden = true;
     document.getElementById('login-screen').hidden = false;
     document.getElementById('app-shell').hidden = true;
     document.getElementById('login-username').focus();
+  }
+
+  async loginOffline({ branchId, username, password }) {
+    const snapshot = await this.offlineStore.snapshot();
+    const user = snapshot?.users?.find((item) => item.branchId === undefined || item.branchId === branchId
+      ? item.username.toLowerCase() === username.toLowerCase() : false);
+    if (!user || snapshot.branchId !== branchId || !(await this.verifyOfflinePassword(password, user.passwordVerifier))) {
+      this.showLoginError('No hay una sesión local válida para este usuario. Conéctese e inicie sesión una vez.');
+      return false;
+    }
+    await this.startOfflineSession(user, snapshot);
+    return true;
+  }
+
+  async verifyOfflinePassword(password, verifier) {
+    try {
+      const [algorithm, iterationsText, saltText, hashText] = String(verifier).split('$');
+      if (algorithm !== 'pbkdf2_sha256') return false;
+      const decode = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+      const actual = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: decode(saltText), iterations: Number(iterationsText) }, key, 256));
+      const expected = decode(hashText);
+      return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+    } catch { return false; }
+  }
+
+  async startOfflineSession(user, snapshot) {
+    this.currentSession = { ...user, branchId: snapshot.branchId, branchName: snapshot.branchName };
+    this.currentShift = snapshot.shift;
+    products.splice(0, products.length, ...snapshot.products);
+    document.getElementById('offline-screen').hidden = true;
+    document.getElementById('login-screen').hidden = true;
+    document.getElementById('app-shell').hidden = false;
+    const sessionUser = document.getElementById('session-user');
+    const name = document.createElement('strong'); name.textContent = user.username;
+    const details = document.createElement('span'); details.textContent = `${user.name} · ${user.role} · ${snapshot.branchName}`;
+    sessionUser.replaceChildren(name, details, document.getElementById('activate-offline-mode-sidebar'), document.getElementById('logout'));
+    this.applyPermissions();
+    this.shiftSummary.setShift(this.currentShift);
+    this.syncShiftUi();
+    this.offlineMode = true;
+    this.renderAll();
+    this.updateOfflineStatus();
+    this.showView('ventas');
+    this.showToast('Modo sin conexión activo. Las ventas se sincronizarán al reconectar.');
   }
 
   showLoginError(message) {
@@ -302,11 +393,13 @@ class PointOfSaleApp {
   }
 
   async restockProduct(productId, quantity) {
+    if (this.offlineMode) return this.queueRestock([{ productId, quantity }]);
     await this.api.restockProduct(productId, quantity);
     await this.loadProducts();
   }
 
   async bulkRestockProducts(items) {
+    if (this.offlineMode) return this.queueRestock(items);
     await this.api.restockProducts(items);
     await this.loadProducts();
   }
@@ -322,8 +415,87 @@ class PointOfSaleApp {
   }
 
   async checkout(sale) {
+    if (this.offlineMode) {
+      const operation = await this.offlineStore.enqueue('sale', sale, { userId: this.currentSession.userId });
+      sale.lines.forEach((line) => {
+        const product = products.find((item) => item.id === line.productId);
+        if (product) product.stock = Math.max(0, product.stock - line.qty);
+      });
+      await this.offlineStore.saveSnapshot({ ...(await this.offlineStore.snapshot()), products });
+      this.renderAll();
+      this.updateOfflineStatus();
+      this.showToast(`Venta guardada sin conexión (${operation.id.slice(0, 8)}).`);
+      return;
+    }
     await this.api.createSale(sale);
     await Promise.all([this.refreshData(), this.loadHistory(true)]);
+  }
+
+  async queueRestock(items) {
+    await this.offlineStore.enqueue('restock', { items }, { userId: this.currentSession.userId });
+    items.forEach(({ productId, quantity }) => {
+      const product = products.find((item) => item.id === Number(productId));
+      if (product) product.stock += Number(quantity);
+    });
+    await this.offlineStore.saveSnapshot({ ...(await this.offlineStore.snapshot()), products });
+    this.renderAll();
+    this.updateOfflineStatus();
+    this.showToast('Reposición guardada sin conexión.');
+  }
+
+  enableOfflineMode() {
+    if (!this.currentSession) return;
+    this.offlineMode = true;
+    this.offlineModeRequested = true;
+    this.updateOfflineStatus();
+    this.showToast('Sin conexión: los cambios nuevos se guardarán localmente.');
+  }
+
+  async syncOfflineOperations() {
+    if (this.syncingOffline || !this.currentSession) return;
+    this.syncingOffline = true;
+    try {
+      const operations = await this.offlineStore.pendingForUser(this.currentSession.userId);
+      if (!operations.length) {
+        this.offlineMode = false;
+        this.offlineModeRequested = false;
+        return;
+      }
+      const { results } = await this.api.syncOffline(operations);
+      for (const result of results) await this.offlineStore.mark(result.id, result.status === 'applied' ? 'applied' : 'error', result.message || null);
+      const failed = results.filter((result) => result.status === 'error');
+      if (failed.length) {
+        this.showToast(`${failed.length} operación(es) requieren revisión antes de sincronizar.`);
+      } else {
+        this.offlineMode = false;
+        this.offlineModeRequested = false;
+        await this.refreshData();
+        try {
+          const { snapshot } = await this.api.getOfflineBootstrap();
+          await this.offlineStore.saveSnapshot(snapshot);
+        } catch (error) {
+          console.warn('No se pudo renovar la copia offline.', error);
+        }
+        this.showToast(`${results.length} operación(es) sincronizadas.`);
+      }
+    } catch (error) {
+      this.showToast('No se pudo sincronizar todavía. Las operaciones siguen seguras en este dispositivo.');
+    } finally {
+      this.syncingOffline = false;
+      this.updateOfflineStatus();
+    }
+  }
+
+  async updateOfflineStatus() {
+    const status = document.getElementById('connection-status');
+    const text = document.getElementById('connection-status-text');
+    if (!this.offlineMode) { status.hidden = true; return; }
+    const pending = this.currentSession
+      ? (await this.offlineStore.pendingForUser(this.currentSession.userId)).length
+      : await this.offlineStore.countPending();
+    status.hidden = false;
+    status.classList.remove('is-online');
+    text.textContent = `Sin conexión · ${pending} operación${pending === 1 ? '' : 'es'} pendiente${pending === 1 ? '' : 's'}`;
   }
 
   async refundSale(saleId) {
@@ -339,15 +511,30 @@ class PointOfSaleApp {
       if (this.currentShift?.status === 'abierto') {
         if (!['administrador', 'encargado'].includes(this.currentSession.role)) return;
         if (!(await this.confirmCloseShift())) return;
-        this.currentShift = (await this.api.closeShift()).shift;
+        if (this.offlineMode) {
+          await this.offlineStore.enqueue('shift-close', {}, { userId: this.currentSession.userId });
+          this.currentShift = { ...this.currentShift, status: 'cerrado', closedAt: new Date().toISOString(), provisional: true };
+          await this.offlineStore.saveSnapshot({ ...(await this.offlineStore.snapshot()), shift: this.currentShift });
+          this.updateOfflineStatus();
+        } else this.currentShift = (await this.api.closeShift()).shift;
         this.sales.clearCart();
       } else {
-        await this.api.openShift();
-        this.currentShift = (await this.api.getCurrentShift()).shift;
+        if (this.offlineMode) {
+          await this.offlineStore.enqueue('shift-open', {}, { userId: this.currentSession.userId });
+          this.currentShift = { id: `offline-${crypto.randomUUID()}`, status: 'abierto', openedAt: new Date().toISOString(), provisional: true };
+          await this.offlineStore.saveSnapshot({ ...(await this.offlineStore.snapshot()), shift: this.currentShift });
+          this.updateOfflineStatus();
+        } else {
+          await this.api.openShift();
+          this.currentShift = (await this.api.getCurrentShift()).shift;
+        }
       }
       this.shiftSummary.setShift(this.currentShift);
       this.syncShiftUi();
-      await this.refreshData();
+      // En modo offline el turno ya se refleja en el estado local. Consultar
+      // la API aquí convertía una acción válida en un falso error de red.
+      if (this.offlineMode) this.renderAll();
+      else await this.refreshData();
       this.showToast(this.currentShift?.status === 'abierto' ? 'Turno iniciado.' : 'Turno finalizado.');
     } catch (error) {
       this.showToast(error.message);
