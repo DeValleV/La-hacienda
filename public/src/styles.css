@@ -2434,7 +2434,8 @@ html.touch-tablet .product-card small {
 
   .sidebar nav button:not(.new-sale),
   .sidebar .sidebar-bottom button:not(.new-sale),
-  .sidebar button.logout-button {
+  .sidebar button.logout-button,
+  .sidebar button.offline-mode-button {
     display: block;
     min-height: 44px;
     padding: 12px;
@@ -2458,6 +2459,11 @@ html.touch-tablet .product-card small {
 
   .sidebar .session-user strong {
     font-size: 13px;
+  }
+
+  .sidebar button.offline-mode-button {
+    border-top: 1px solid #ead8d1;
+    color: var(--blue);
   }
 
   .menu-button {
