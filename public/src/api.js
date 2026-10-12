@@ -12,7 +12,12 @@ const FRIENDLY_API_ERRORS = {
   INVALID_ORIGIN: 'Esta acción debe realizarse desde la página del sistema.',
   INTERNAL_ERROR: 'No se pudo completar la operación por un problema del sistema. Inténtelo de nuevo.',
   CATALOG_NOT_INITIALIZED: 'No se pudo cargar la configuración de productos. Avise a un administrador.',
+  IMAGE_TOO_LARGE: 'La imagen no debe superar 5 MB.',
+  INVALID_IMAGE: 'Use una imagen JPG, PNG o WebP válida.',
+  IMAGE_STORAGE_UNAVAILABLE: 'El almacenamiento de imágenes aún no está configurado.',
 };
+const SLOW_CONNECTION_MS = 10_000;
+let slowRequestCount = 0;
 
 function friendlyError(payload, status) {
   const code = payload.error?.code;
@@ -24,6 +29,12 @@ function friendlyError(payload, status) {
 class ApiClient {
   async request(path, options = {}) {
     let response;
+    let isSlow = false;
+    const slowConnectionTimer = setTimeout(() => {
+      isSlow = true;
+      slowRequestCount += 1;
+      window.dispatchEvent(new CustomEvent('connection:slow'));
+    }, SLOW_CONNECTION_MS);
     try {
       response = await fetch(path, {
         credentials: 'same-origin',
@@ -34,6 +45,12 @@ class ApiClient {
       const error = new Error('No se pudo conectar con el sistema. Revise su conexión e inténtelo de nuevo.');
       error.code = 'NETWORK_ERROR';
       throw error;
+    } finally {
+      clearTimeout(slowConnectionTimer);
+      if (isSlow) {
+        slowRequestCount -= 1;
+        if (!slowRequestCount) window.dispatchEvent(new CustomEvent('connection:responsive'));
+      }
     }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -47,11 +64,29 @@ class ApiClient {
 
   getBranches() { return this.request('/api/auth/branches'); }
   getSession() { return this.request('/api/me'); }
+  getOfflineBootstrap() { return this.request('/api/offline/bootstrap'); }
+  syncOffline(operations) { return this.request('/api/offline/sync', { method: 'POST', body: JSON.stringify({ operations }) }); }
   login(credentials) { return this.request('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) }); }
   logout() { return this.request('/api/auth/logout', { method: 'POST', body: '{}' }); }
   getProducts() { return this.request('/api/products'); }
   createProduct(product) { return this.request('/api/products', { method: 'POST', body: JSON.stringify(product) }); }
   updateProduct(id, product) { return this.request(`/api/products/${id}`, { method: 'PATCH', body: JSON.stringify(product) }); }
+  async uploadProductImage(id, image) {
+    let response;
+    try {
+      response = await fetch(`/api/products/${id}/image`, { method: 'PUT', credentials: 'same-origin', body: image });
+    } catch {
+      throw new Error('No se pudo subir la imagen. Revise su conexión e inténtelo de nuevo.');
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(friendlyError(payload, response.status));
+      error.status = response.status;
+      error.code = payload.error?.code;
+      throw error;
+    }
+    return payload;
+  }
   restockProduct(id, quantity) { return this.request(`/api/products/${id}/restock`, { method: 'POST', body: JSON.stringify({ quantity }) }); }
   restockProducts(items) { return this.request('/api/products/restock-batch', { method: 'POST', body: JSON.stringify({ items }) }); }
   deactivateProduct(id) { return this.request(`/api/products/${id}/deactivate`, { method: 'POST', body: '{}' }); }

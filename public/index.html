@@ -3,12 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ff6600">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/app-icon.svg">
   <title>Gestión La Hacienda | Comedor Industrial</title>
   <link rel="stylesheet" href="src/styles.css">
   <link rel="stylesheet" href="src/inventory.css">
   <link rel="stylesheet" href="src/sales-summary.css">
 </head>
 <body>
+  <aside id="slow-connection" class="slow-connection" role="status" aria-live="polite" hidden>
+    <strong>La conexión está tardando más de lo normal.</strong>
+    <span>Puede seguir esperando o abrir el modo sin conexión.</span>
+    <div><button id="keep-waiting" class="secondary" type="button">Seguir esperando</button><button id="activate-offline-mode" class="primary" type="button">Trabajar sin conexión</button></div>
+  </aside>
+  <section id="offline-screen" class="offline-screen" aria-labelledby="offline-title" hidden>
+    <div class="offline-card">
+      <div class="offline-icon" aria-hidden="true">⌁</div>
+      <p class="eyebrow">MODO SIN CONEXIÓN</p>
+      <h1 id="offline-title">No hay conexión a Internet</h1>
+      <p id="offline-description">Inicia sesión con una cuenta que ya se haya usado en este dispositivo. Las ventas, reposiciones y turnos se guardarán aquí hasta recuperar la conexión.</p>
+      <button id="retry-connection" class="primary" type="button">Reintentar conexión</button>
+      <p class="offline-help">Cuando se restablezca la señal, la aplicación continuará automáticamente.</p>
+    </div>
+  </section>
+  <aside id="update-available" class="update-available" role="status" hidden>
+    <span>Hay una actualización lista para instalar.</span>
+    <button id="apply-update" class="secondary" type="button">Actualizar</button>
+  </aside>
   <section id="login-screen" class="login-screen" aria-labelledby="login-title">
     <form id="login-form" class="login-card" novalidate>
       <div class="login-brand"><strong>Gestión La Hacienda</strong><span>Comedor industrial</span></div>
@@ -18,6 +43,11 @@
       <label for="login-password">Contraseña<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
       <p id="login-error" class="login-error" role="alert" hidden></p>
       <button class="primary login-submit" type="submit">Entrar</button>
+      <details class="install-help">
+        <summary>Instalar aplicación en esta tablet</summary>
+        <p><strong>Android:</strong> abra el menú del navegador y elija “Instalar aplicación”.</p>
+        <p><strong>iPad:</strong> en Safari, toque Compartir y elija “Añadir a pantalla de inicio”.</p>
+      </details>
     </form>
   </section>
 
@@ -30,16 +60,17 @@
       <button data-view="resumen"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M8 16v-4m4 4V7m4 9v-6"/></svg>Turno</button>
       <button data-view="historial"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg>Historial de ventas</button>
     </nav>
-    <div id="session-user" class="session-user" aria-label="Sesión actual"><button id="logout" class="logout-button" type="button">Cerrar sesión</button></div>
+    <div id="session-user" class="session-user" aria-label="Sesión actual"><button id="activate-offline-mode-sidebar" class="offline-mode-button" type="button" role="switch" aria-checked="false"><span>Modo:</span><strong id="offline-mode-label">Online</strong><span class="offline-mode-toggle" aria-hidden="true"></span></button><button id="logout" class="logout-button" type="button">Cerrar sesión</button></div>
     <div class="sidebar-bottom"><button data-view="configuracion"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.24 2.24-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56v.1h-3.16v-.1a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.24-2.24.06-.06A1.7 1.7 0 0 0 6.62 15a1.7 1.7 0 0 0-1.56-1.03h-.1v-3.16h.1A1.7 1.7 0 0 0 6.62 9.8a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.24-2.24.06.06a1.7 1.7 0 0 0 1.88.34 1.7 1.7 0 0 0 1.03-1.56v-.1h3.16v.1a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.24 2.24-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03h.1v3.16h-.1A1.7 1.7 0 0 0 19.4 15z"/></svg>Configuración</button></div>
   </aside>
+  <button id="mobile-menu-backdrop" class="mobile-menu-backdrop" type="button" aria-label="Cerrar menú lateral" hidden></button>
 
   <main>
     <div id="app-loading" class="app-loading" hidden>Cargando datos…</div>
     <header>
       <button class="menu-button sidebar-toggle" id="toggle-sidebar" type="button" aria-label="Ocultar menú lateral" aria-expanded="true">☰</button>
       <div id="sales-header" class="sales-header" hidden>
-        <div><p class="eyebrow">PUNTO DE VENTA</p><div class="sales-title-row"><h1>Sucursal</h1><span class="shift-status">● Caja abierta</span></div></div>
+        <div><p class="eyebrow">PUNTO DE VENTA</p><div class="sales-title-row"><h1>Sucursal</h1><span class="shift-status">● Caja abierta</span><span id="connection-indicator" class="connection-indicator is-online" role="status" aria-label="Modo online" title="Modo online"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2.8 8.7a14 14 0 0 1 18.4 0"/><path d="M5.9 12a9.4 9.4 0 0 1 12.2 0"/><path d="M9.1 15.4a4.8 4.8 0 0 1 5.8 0"/><circle cx="12" cy="19" r="1"/></svg></span></div></div>
       </div>
     </header>
 
@@ -126,35 +157,16 @@
         <button class="secondary" type="button" data-settings-tab="catalogs">Catálogos</button>
       </div>
       <section class="panel settings-panel active" data-settings-panel="users">
-        <form id="user-form" class="settings-form" novalidate>
-          <input id="user-id" type="hidden">
-          <label>Nombre<input id="user-name" required maxlength="120"></label>
-          <label>Usuario<input id="user-username" required maxlength="80"></label>
-          <label>Rol<select id="user-role"><option value="cajero">Cajero</option><option value="encargado">Encargado</option><option value="administrador">Administrador</option></select></label>
-          <label>Contraseña<input id="user-password" type="password" minlength="10" autocomplete="new-password"><small class="muted">Obligatoria para usuarios nuevos.</small></label>
-          <label class="settings-checkbox"><input id="user-active" type="checkbox" checked> Usuario activo</label>
-          <div class="actions"><button class="primary" type="submit">Guardar usuario</button><button id="cancel-user-edit" class="secondary" type="button" hidden>Cancelar</button></div>
-        </form>
-        <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th>USUARIO</th><th>ROL</th><th>ESTADO</th><th></th></tr></thead><tbody id="settings-users"></tbody></table></div>
+        <div class="panel-toolbar"><h2>Usuarios</h2><button id="new-user" class="primary" type="button">Nuevo usuario</button></div>
+        <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th>USUARIO</th><th>ROL</th><th>SUCURSAL</th><th>ESTADO</th><th></th></tr></thead><tbody id="settings-users"></tbody></table></div>
       </section>
       <section class="panel settings-panel" data-settings-panel="branches" hidden>
-        <form id="branch-form" class="settings-form" novalidate>
-          <input id="branch-id" type="hidden">
-          <label>Nombre<input id="branch-name" required maxlength="120"></label>
-          <label>Código<input id="branch-code" required maxlength="30"></label>
-          <label>Dirección<input id="branch-address" maxlength="240"></label>
-          <label class="settings-checkbox"><input id="branch-active" type="checkbox" checked> Sucursal activa</label>
-          <div class="actions"><button class="primary" type="submit">Guardar sucursal</button><button id="cancel-branch-edit" class="secondary" type="button" hidden>Cancelar</button></div>
-        </form>
+        <div class="panel-toolbar"><h2>Sucursales</h2><button id="new-branch" class="primary" type="button">Nueva sucursal</button></div>
         <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th>CÓDIGO</th><th>DIRECCIÓN</th><th>ESTADO</th><th></th></tr></thead><tbody id="settings-branches"></tbody></table></div>
       </section>
       <section class="panel settings-panel" data-settings-panel="catalogs" hidden>
-        <form id="catalog-form" class="settings-form compact" novalidate>
-          <label>Catálogo<select id="catalog-type"><option value="categories">Categorías</option><option value="brands">Marcas</option></select></label>
-          <label>Nombre<input id="catalog-name" required maxlength="80"></label>
-          <button class="primary" type="submit">Agregar</button>
-        </form>
-        <div id="settings-catalogs" class="catalog-list"></div>
+        <div class="panel-toolbar"><label>Catálogo<select id="catalog-type"><option value="categories">Categorías</option><option value="brands">Marcas</option></select></label><button id="new-catalog" class="primary" type="button">Nuevo elemento</button></div>
+        <div class="table-wrap"><table><thead><tr><th>NOMBRE</th><th></th></tr></thead><tbody id="settings-catalogs"></tbody></table></div>
       </section>
     </section>
 </main>
@@ -162,6 +174,38 @@
 
   
 
+  <dialog id="user-dialog">
+    <form id="user-form" novalidate>
+      <div class="dialog-head"><h2 id="user-dialog-title">Nuevo usuario</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
+      <input id="user-id" type="hidden">
+      <label>Nombre<input id="user-name" required maxlength="120"></label>
+      <label>Usuario<input id="user-username" required maxlength="80"></label>
+      <label>Rol<select id="user-role"><option value="cajero">Cajero</option><option value="encargado">Encargado</option><option value="administrador">Administrador</option></select></label>
+      <label>Sucursal<select id="user-branch" required></select></label>
+      <label>Contraseña<input id="user-password" type="password" minlength="10" autocomplete="new-password"><small class="muted">Obligatoria para usuarios nuevos.</small></label>
+      <label class="settings-checkbox"><input id="user-active" type="checkbox" checked> Usuario activo</label>
+      <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" type="submit">Guardar usuario</button></div>
+    </form>
+  </dialog>
+  <dialog id="branch-dialog">
+    <form id="branch-form" novalidate>
+      <div class="dialog-head"><h2 id="branch-dialog-title">Nueva sucursal</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
+      <input id="branch-id" type="hidden">
+      <label>Nombre<input id="branch-name" required maxlength="120"></label>
+      <label>Código<input id="branch-code" required maxlength="30"></label>
+      <label>Dirección<input id="branch-address" maxlength="240"></label>
+      <label class="settings-checkbox"><input id="branch-active" type="checkbox" checked> Sucursal activa</label>
+      <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" type="submit">Guardar sucursal</button></div>
+    </form>
+  </dialog>
+  <dialog id="catalog-dialog">
+    <form id="catalog-form" novalidate>
+      <div class="dialog-head"><h2 id="catalog-dialog-title">Nuevo elemento</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
+      <input id="catalog-id" type="hidden">
+      <label>Nombre<input id="catalog-name" required maxlength="80"></label>
+      <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" type="submit">Guardar</button></div>
+    </form>
+  </dialog>
   <dialog id="product-dialog">
     <form method="dialog" novalidate>
       <div class="dialog-head"><h2>Nuevo producto</h2><button type="button" data-dialog-close aria-label="Cerrar">×</button></div>
@@ -187,16 +231,36 @@
         <label>Existencias<input id="new-stock" required type="number" min="0" step="1"></label>
         <label>Stock mínimo<input id="new-min-stock" required type="number" min="0" step="1"></label>
         <div class="field-group">
-          <label for="open-color-palette">Color de la tarjeta</label>
+          <label for="open-color-palette">Color de respaldo</label>
           <input id="new-color" required type="hidden" value="#ff6600">
           <button id="open-color-palette" class="color-picker-trigger" type="button" aria-haspopup="dialog">
             <span class="color-preview" aria-hidden="true"></span>
             <span>Elegir color</span>
           </button>
         </div>
+        <div class="field-group full-width">
+          <label for="product-image-input">Imagen del producto <span class="field-optional">Opcional</span></label>
+          <input id="product-image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          <button id="product-image-dropzone" class="product-image-dropzone" type="button" aria-describedby="product-image-help">
+            <span class="product-image-preview" aria-hidden="true"></span>
+            <span><strong>Seleccionar imagen</strong><small id="product-image-help">o arrastra y suelta aquí · JPG, PNG o WebP · máximo 5 MB</small></span>
+          </button>
+          <button id="crop-product-image" class="secondary crop-product-image" type="button" hidden>▣ Ajustar área visible</button>
+        </div>
       </div>
       <div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>Cancelar</button><button class="primary" id="save-product" type="button">Guardar producto</button></div>
     </form>
+  </dialog>
+  <dialog id="image-crop-dialog" class="image-crop-dialog" aria-labelledby="image-crop-title">
+    <div class="image-cropper">
+      <div class="dialog-head"><div><p class="eyebrow">RECORTE DE IMAGEN</p><h2 id="image-crop-title">Ajustar área visible</h2></div><button id="cancel-image-crop" type="button" aria-label="Cancelar recorte">×</button></div>
+      <p class="muted">Arrastra la imagen para encuadrarla. Usa el control para acercar o alejar.</p>
+      <div id="image-crop-viewport" class="image-crop-viewport" aria-label="Área que aparecerá en la tarjeta">
+        <img id="image-crop-source" alt="Vista previa para recortar">
+      </div>
+      <label class="crop-zoom-control" for="image-crop-zoom"><span>Zoom</span><input id="image-crop-zoom" type="range" min="0" max="100" value="0"></label>
+      <div class="dialog-actions"><button id="cancel-image-crop-secondary" class="secondary" type="button">Cancelar</button><button id="apply-image-crop" class="primary" type="button">Usar este recorte</button></div>
+    </div>
   </dialog>
   <dialog id="restock-dialog">
     <form method="dialog" novalidate>
@@ -224,7 +288,7 @@
     <form method="dialog" novalidate>
       <div class="dialog-head"><div><p class="eyebrow">PALETA DE LA TARJETA</p><h2 id="color-palette-title">Elige un color</h2></div><button type="button" data-dialog-close aria-label="Cerrar paleta">×</button></div>
       <div id="color-options" class="color-options" aria-label="40 opciones de color"></div>
-      <p class="muted">El color identificará la tarjeta de este producto en el punto de venta.</p>
+      <p class="muted">Este color se muestra cuando el producto no tiene imagen o ésta no puede cargarse.</p>
     </form>
   </dialog>
   <dialog id="history-calendar-dialog" class="history-calendar-dialog" aria-labelledby="history-calendar-title">
@@ -247,11 +311,13 @@
   <div id="toast" role="status"></div>
   <script src="src/excel.js"></script>
   <script src="src/api.js"></script>
+  <script src="src/offline.js"></script>
   <script src="src/views/InventoryView.js"></script>
   <script src="src/views/SalesView.js"></script>
   <script src="src/views/ShiftSummaryView.js"></script>
   <script src="src/views/HistoryView.js"></script>
   <script src="src/views/SettingsView.js"></script>
   <script src="src/app.js"></script>
+  <script src="src/pwa.js"></script>
 </body>
 </html>

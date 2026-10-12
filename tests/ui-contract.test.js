@@ -6,6 +6,8 @@ const root = new URL('../', import.meta.url);
 const html = readFileSync(new URL('public/index.html', root), 'utf8');
 const scripts = [
   'public/src/app.js',
+  'public/src/offline.js',
+  'public/src/pwa.js',
   'public/src/views/InventoryView.js',
   'public/src/views/SalesView.js',
   'public/src/views/ShiftSummaryView.js',
@@ -42,4 +44,20 @@ test('los diálogos pueden cerrarse sin enviar formularios y la reposición ráp
   assert.match(html, /id="bulk-restock"/);
   assert.doesNotMatch(html, /<button(?:\s[^>]*)?\svalue="cancel"/);
   assert.match(scripts, /data-dialog-close/);
+});
+
+test('la aplicación declara los recursos requeridos para la instalación PWA', () => {
+  assert.match(html, /rel="manifest" href="\/manifest\.webmanifest"/);
+  assert.match(html, /id="offline-screen"/);
+  assert.match(html, /id="slow-connection"/);
+  assert.match(html, /id="activate-offline-mode"/);
+  assert.match(scripts, /activate-offline-mode-sidebar/);
+  assert.match(scripts, /class OfflineStore/);
+  assert.match(html, /id="update-available"/);
+  assert.match(html, /Instalar aplicación en esta tablet/);
+  assert.match(scripts, /serviceWorker\.register\('\/sw\.js'\)/);
+  assert.doesNotMatch(scripts, /navigator\.onLine/);
+  assert.match(html, /id="connection-indicator"/);
+  assert.match(html, /id="offline-mode-label"/);
+  assert.match(readFileSync(new URL('public/src/styles.css', root), 'utf8'), /\.connection-indicator\.is-offline/);
 });

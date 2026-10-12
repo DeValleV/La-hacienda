@@ -126,13 +126,14 @@ function mapProduct(row) {
     id: row.id, name: row.name, category: row.category, brand: row.brand,
     status: row.status, price: row.priceCents / 100, stock: row.stock,
     minStock: row.minStock, color: row.color,
+    imageUrl: row.imageKey ? `/api/products/${row.id}/image?v=${encodeURIComponent(row.imageKey)}` : null,
   };
 }
 
 const PRODUCT_SELECT = `
   SELECT p.id, p.nombre_base AS name, c.nombre AS category, m.nombre AS brand,
          e.nombre AS status, p.precio_centavos AS priceCents,
-         p.stock, p.stock_minimo AS minStock, p.color_tarjeta AS color
+         p.stock, p.stock_minimo AS minStock, p.color_tarjeta AS color, p.imagen_clave AS imageKey
   FROM producto p JOIN categoria c ON c.id = p.categoria_id
   JOIN marca m ON m.id = p.marca_id JOIN estado e ON e.id = p.estado_id`;
 
@@ -174,6 +175,64 @@ async function updateProduct(request, env, session, productId) {
   if (!result.meta.changes) throw new ApiError(404, 'Producto no encontrado.', 'NOT_FOUND');
   const row = await env.DB.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.sucursal_id = ?`).bind(productId, session.branchId).first();
   return json({ product: mapProduct(row) });
+}
+
+const PRODUCT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+function imageContentType(bytes) {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+    && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return 'image/png';
+  if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+    && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  return null;
+}
+
+async function productImageRecord(env, session, productId) {
+  const product = await env.DB.prepare('SELECT id, imagen_clave AS imageKey FROM producto WHERE id = ? AND sucursal_id = ?')
+    .bind(productId, session.branchId).first();
+  if (!product) throw new ApiError(404, 'Producto no encontrado.', 'NOT_FOUND');
+  return product;
+}
+
+async function uploadProductImage(request, env, session, productId) {
+  requireSession(session, PRODUCT_ROLES);
+  if (!env.PRODUCT_IMAGES) throw new ApiError(503, 'El almacenamiento de imágenes no está configurado.', 'IMAGE_STORAGE_UNAVAILABLE');
+  const declaredSize = Number(request.headers.get('Content-Length'));
+  if (Number.isFinite(declaredSize) && declaredSize > PRODUCT_IMAGE_MAX_BYTES) {
+    throw new ApiError(413, 'La imagen no debe superar 5 MB.', 'IMAGE_TOO_LARGE');
+  }
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (!bytes.length || bytes.length > PRODUCT_IMAGE_MAX_BYTES) throw new ApiError(413, 'La imagen no debe superar 5 MB.', 'IMAGE_TOO_LARGE');
+  const contentType = imageContentType(bytes);
+  if (!contentType) throw new ApiError(415, 'Use una imagen JPG, PNG o WebP válida.', 'INVALID_IMAGE');
+
+  const product = await productImageRecord(env, session, productId);
+  const key = `branches/${session.branchId}/products/${productId}/${crypto.randomUUID()}`;
+  await env.PRODUCT_IMAGES.put(key, bytes, { httpMetadata: { contentType } });
+  try {
+    await env.DB.prepare('UPDATE producto SET imagen_clave = ? WHERE id = ? AND sucursal_id = ?')
+      .bind(key, productId, session.branchId).run();
+  } catch (error) {
+    await env.PRODUCT_IMAGES.delete(key);
+    throw error;
+  }
+  if (product.imageKey) await env.PRODUCT_IMAGES.delete(product.imageKey);
+  const row = await env.DB.prepare(`${PRODUCT_SELECT} WHERE p.id = ? AND p.sucursal_id = ?`).bind(productId, session.branchId).first();
+  return json({ product: mapProduct(row) });
+}
+
+async function getProductImage(env, session, productId) {
+  if (!env.PRODUCT_IMAGES) throw new ApiError(503, 'El almacenamiento de imágenes no está configurado.', 'IMAGE_STORAGE_UNAVAILABLE');
+  const product = await productImageRecord(env, session, productId);
+  if (!product.imageKey) throw new ApiError(404, 'El producto no tiene imagen.', 'NOT_FOUND');
+  const object = await env.PRODUCT_IMAGES.get(product.imageKey);
+  if (!object) throw new ApiError(404, 'No se encontró la imagen.', 'NOT_FOUND');
+  return new Response(object.body, { headers: {
+    'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
+    'Cache-Control': 'private, max-age=3600',
+    ETag: object.httpEtag,
+  } });
 }
 
 async function restockProduct(request, env, session, productId) {
@@ -247,7 +306,8 @@ async function currentShift(env, session) {
 }
 
 async function openShift(env, session) {
-  requireSession(session, PRODUCT_ROLES);
+  // Any authenticated user in the branch can start its shared shift.
+  requireSession(session);
   const existing = await env.DB.prepare("SELECT id FROM turno WHERE sucursal_id = ? AND estado = 'abierto'").bind(session.branchId).first();
   if (existing) throw new ApiError(409, 'Ya existe un turno abierto.', 'SHIFT_ALREADY_OPEN');
   const result = await env.DB.prepare('INSERT INTO turno (sucursal_id, abierto_por_usuario_id) VALUES (?, ?)').bind(session.branchId, session.userId).run();
@@ -317,6 +377,128 @@ async function createSale(request, env, session) {
     throw error;
   }
   return json({ sale: await loadSale(env.DB, session, saleId) }, 201);
+}
+
+async function offlineBootstrap(env, session) {
+  const [products, shift, users] = await Promise.all([
+    env.DB.prepare(`${PRODUCT_SELECT} WHERE p.sucursal_id = ? ORDER BY p.nombre_base`).bind(session.branchId).all(),
+    env.DB.prepare("SELECT id, fecha_apertura AS openedAt, fecha_cierre AS closedAt, estado AS status FROM turno WHERE sucursal_id = ? ORDER BY fecha_apertura DESC LIMIT 1").bind(session.branchId).first(),
+    env.DB.prepare(`SELECT u.id AS userId, u.nombre AS name, u.nombre_usuario AS username, r.nombre AS role,
+                    u.password_hash AS passwordVerifier FROM usuario u JOIN rol r ON r.id = u.rol_id
+                    WHERE u.sucursal_id = ? AND u.activo = 1`).bind(session.branchId).all(),
+  ]);
+  return json({ snapshot: {
+    branchId: session.branchId, branchName: session.branchName, users: users.results,
+    products: products.results.map(mapProduct), shift, syncedAt: new Date().toISOString(),
+  } });
+}
+
+async function createOfflineSale(env, session, operation) {
+  const payload = operation.payload || {};
+  const type = requireText(payload.tipoVenta, 'tipo de venta', 30).toLowerCase();
+  const rawLines = Array.isArray(payload.lines) ? payload.lines : [];
+  if (!rawLines.length || rawLines.length > 100) throw new ApiError(400, 'La venta debe contener productos.', 'VALIDATION_ERROR');
+  const quantities = new Map();
+  rawLines.forEach((line) => {
+    const productId = requireInteger(line.productId, 'producto', 1);
+    quantities.set(productId, (quantities.get(productId) || 0) + requireInteger(line.qty, 'cantidad', 1));
+  });
+  const saleType = await env.DB.prepare('SELECT id FROM tipo_venta WHERE nombre = ?').bind(type).first();
+  const shift = await env.DB.prepare("SELECT id FROM turno WHERE sucursal_id = ? AND estado = 'abierto'").bind(session.branchId).first();
+  if (!saleType || !shift) throw new ApiError(409, 'No hay un turno abierto para sincronizar la venta.', 'NO_OPEN_SHIFT');
+  const saleId = randomSaleId();
+  const statements = [
+    env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en) VALUES (?, ?, ?, ?, ?)')
+      .bind(operation.id, session.branchId, session.userId, 'sale', operation.occurredAt),
+    env.DB.prepare('INSERT INTO venta (id, sucursal_id, turno_id, tipo_venta_id, usuario_id, fecha_hora) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(saleId, session.branchId, shift.id, saleType.id, session.userId, operation.occurredAt),
+  ];
+  quantities.forEach((quantity, productId) => statements.push(env.DB.prepare(`
+    INSERT INTO detalle_venta (venta_id, producto_id, cantidad, nombre_producto, precio_unitario_centavos)
+    VALUES (?, ?, ?, (SELECT nombre_base FROM producto WHERE id = ?), (SELECT precio_centavos FROM producto WHERE id = ?))
+  `).bind(saleId, productId, quantity, productId, productId)));
+  try { await env.DB.batch(statements); }
+  catch (error) {
+    if (String(error).includes('PRODUCTO_NO_DISPONIBLE')) throw new ApiError(409, 'Un producto ya no tiene stock suficiente.', 'INSUFFICIENT_STOCK');
+    throw error;
+  }
+  return saleId;
+}
+
+async function applyOfflineRestock(env, session, operation) {
+  requireSession(session, PRODUCT_ROLES);
+  const items = Array.isArray(operation.payload?.items) ? operation.payload.items : [];
+  if (!items.length || items.length > 100) throw new ApiError(400, 'Reposición offline no válida.', 'VALIDATION_ERROR');
+  const quantities = new Map();
+  items.forEach((item) => {
+    const productId = requireInteger(item.productId, 'producto', 1);
+    quantities.set(productId, (quantities.get(productId) || 0) + requireInteger(item.quantity, 'cantidad', 1));
+  });
+  const productIds = [...quantities.keys()];
+  const markers = productIds.map(() => '?').join(', ');
+  const available = await env.DB.prepare(`SELECT id FROM producto WHERE sucursal_id = ? AND id IN (${markers})`)
+    .bind(session.branchId, ...productIds).all();
+  if (available.results.length !== productIds.length) {
+    throw new ApiError(404, 'Uno de los productos ya no existe o pertenece a otra sucursal.', 'NOT_FOUND');
+  }
+  const statements = [env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en) VALUES (?, ?, ?, ?, ?)')
+    .bind(operation.id, session.branchId, session.userId, 'restock', operation.occurredAt)];
+  quantities.forEach((quantity, productId) => statements.push(env.DB.prepare('UPDATE producto SET stock = stock + ? WHERE id = ? AND sucursal_id = ?')
+    .bind(quantity, productId, session.branchId)));
+  await env.DB.batch(statements);
+}
+
+async function applyOfflineShift(env, session, operation) {
+  requireSession(session, PRODUCT_ROLES);
+  const isOpen = operation.type === 'shift-open';
+  const statements = [env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en) VALUES (?, ?, ?, ?, ?)')
+    .bind(operation.id, session.branchId, session.userId, operation.type, operation.occurredAt)];
+  if (isOpen) {
+    statements.push(env.DB.prepare("INSERT INTO turno (sucursal_id, abierto_por_usuario_id, fecha_apertura, estado) VALUES (?, ?, ?, 'abierto')")
+      .bind(session.branchId, session.userId, operation.occurredAt));
+  } else {
+    statements.push(env.DB.prepare("UPDATE turno SET estado = 'cerrado', cerrado_por_usuario_id = ?, fecha_cierre = ? WHERE sucursal_id = ? AND estado = 'abierto'")
+      .bind(session.userId, operation.occurredAt, session.branchId));
+  }
+  await env.DB.batch(statements);
+}
+
+async function syncOffline(request, env, session) {
+  const operations = (await bodyJson(request)).operations;
+  if (!Array.isArray(operations) || operations.length > 100) throw new ApiError(400, 'Operaciones sin conexión no válidas.', 'VALIDATION_ERROR');
+  const results = [];
+  for (const operation of operations) {
+    const id = requireText(operation?.id, 'operación', 80);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      results.push({ id, status: 'error', code: 'VALIDATION_ERROR', message: 'El identificador de la operación no es válido.' });
+      continue;
+    }
+    if (!Number.isFinite(Date.parse(operation.occurredAt))) {
+      results.push({ id, status: 'error', code: 'VALIDATION_ERROR', message: 'La hora de la operación no es válida.' });
+      continue;
+    }
+    if (requireInteger(operation.actor?.userId, 'usuario', 1) !== session.userId) {
+      results.push({ id, status: 'error', code: 'FORBIDDEN', message: 'Inicie sesión con el usuario que registró esta operación para sincronizarla.' });
+      continue;
+    }
+    const known = await env.DB.prepare('SELECT operation_id FROM operacion_offline WHERE operation_id = ?').bind(id).first();
+    if (known) { results.push({ id, status: 'applied', duplicate: true }); continue; }
+    try {
+      if (operation.type === 'sale') {
+        const saleId = await createOfflineSale(env, session, operation);
+        results.push({ id, status: 'applied', saleId });
+      } else if (operation.type === 'restock') {
+        await applyOfflineRestock(env, session, operation);
+        results.push({ id, status: 'applied' });
+      } else if (operation.type === 'shift-open' || operation.type === 'shift-close') {
+        await applyOfflineShift(env, session, operation);
+        results.push({ id, status: 'applied' });
+      } else throw new ApiError(400, 'Tipo de operación offline no soportado.', 'VALIDATION_ERROR');
+    } catch (error) {
+      results.push({ id, status: 'error', code: error.code || 'INTERNAL_ERROR', message: error.message });
+    }
+  }
+  return json({ results });
 }
 
 async function loadSale(db, session, saleId) {
@@ -480,9 +662,13 @@ async function createBootstrapAdmin(request, env) {
 
 async function listUsers(env, session) {
   const result = await env.DB.prepare(`
-    SELECT u.id, u.nombre AS name, u.nombre_usuario AS username, r.nombre AS role, u.activo AS active
-    FROM usuario u JOIN rol r ON r.id = u.rol_id WHERE u.sucursal_id = ? ORDER BY u.nombre
-  `).bind(session.branchId).all();
+    SELECT u.id, u.nombre AS name, u.nombre_usuario AS username, r.nombre AS role,
+           u.sucursal_id AS branchId, b.nombre AS branchName, u.activo AS active
+    FROM usuario u
+    JOIN rol r ON r.id = u.rol_id
+    JOIN sucursal b ON b.id = u.sucursal_id
+    ORDER BY u.nombre
+  `).all();
   return json({ users: result.results.map((user) => ({ ...user, active: Boolean(user.active) })) });
 }
 
@@ -491,26 +677,32 @@ async function createUser(request, env, session) {
   const roleName = requireText(payload.role, 'rol', 30).toLowerCase();
   const role = await env.DB.prepare('SELECT id FROM rol WHERE nombre = ?').bind(roleName).first();
   if (!role) throw new ApiError(400, 'Rol no válido.', 'VALIDATION_ERROR');
+  const branchId = requireInteger(payload.branchId, 'sucursal', 1);
+  const branch = await env.DB.prepare('SELECT id FROM sucursal WHERE id = ? AND activa = 1').bind(branchId).first();
+  if (!branch) throw new ApiError(404, 'Sucursal activa no encontrada.', 'NOT_FOUND');
   const passwordHash = await hashPassword(requirePassword(payload.password));
   const active = payload.active === false ? 0 : 1;
   const result = await env.DB.prepare('INSERT INTO usuario (rol_id, sucursal_id, nombre, nombre_usuario, password_hash, activo) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(role.id, session.branchId, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), passwordHash, active).run();
+    .bind(role.id, branchId, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), passwordHash, active).run();
   return json({ id: result.meta.last_row_id }, 201);
 }
 
 async function updateUser(request, env, session, userId) {
   const payload = await bodyJson(request);
-  const current = await env.DB.prepare('SELECT id FROM usuario WHERE id = ? AND sucursal_id = ?').bind(userId, session.branchId).first();
+  const current = await env.DB.prepare('SELECT id FROM usuario WHERE id = ?').bind(userId).first();
   if (!current) throw new ApiError(404, 'Usuario no encontrado.', 'NOT_FOUND');
   const role = await env.DB.prepare('SELECT id FROM rol WHERE nombre = ?').bind(requireText(payload.role, 'rol', 30).toLowerCase()).first();
   if (!role) throw new ApiError(400, 'Rol no válido.', 'VALIDATION_ERROR');
+  const branchId = requireInteger(payload.branchId, 'sucursal', 1);
+  const branch = await env.DB.prepare('SELECT id FROM sucursal WHERE id = ? AND activa = 1').bind(branchId).first();
+  if (!branch) throw new ApiError(404, 'Sucursal activa no encontrada.', 'NOT_FOUND');
   const active = payload.active === false ? 0 : 1;
   if (payload.password) {
-    await env.DB.prepare('UPDATE usuario SET rol_id = ?, nombre = ?, nombre_usuario = ?, activo = ?, password_hash = ? WHERE id = ? AND sucursal_id = ?')
-      .bind(role.id, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), active, await hashPassword(requirePassword(payload.password)), userId, session.branchId).run();
+    await env.DB.prepare('UPDATE usuario SET rol_id = ?, sucursal_id = ?, nombre = ?, nombre_usuario = ?, activo = ?, password_hash = ? WHERE id = ?')
+      .bind(role.id, branchId, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), active, await hashPassword(requirePassword(payload.password)), userId).run();
   } else {
-    await env.DB.prepare('UPDATE usuario SET rol_id = ?, nombre = ?, nombre_usuario = ?, activo = ? WHERE id = ? AND sucursal_id = ?')
-      .bind(role.id, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), active, userId, session.branchId).run();
+    await env.DB.prepare('UPDATE usuario SET rol_id = ?, sucursal_id = ?, nombre = ?, nombre_usuario = ?, activo = ? WHERE id = ?')
+      .bind(role.id, branchId, requireText(payload.name, 'nombre'), requireText(payload.username, 'usuario', 80), active, userId).run();
   }
   return json({ ok: true });
 }
@@ -588,6 +780,8 @@ async function handleApi(request, env) {
     userId: session.userId, name: session.name, username: session.username, role: session.role,
     branchId: session.branchId, branchName: session.branchName, branchCode: session.branchCode,
   } });
+  if (method === 'GET' && pathname === '/api/offline/bootstrap') return offlineBootstrap(env, session);
+  if (method === 'POST' && pathname === '/api/offline/sync') return syncOffline(request, env, session);
   if (method === 'GET' && pathname === '/api/products') return listProducts(env, session);
   if (method === 'POST' && pathname === '/api/products') return createProduct(request, env, session);
   if (method === 'POST' && pathname === '/api/sales') return createSale(request, env, session);
@@ -637,6 +831,9 @@ async function handleApi(request, env) {
 
   const updateMatch = pathname.match(/^\/api\/products\/(\d+)$/);
   if (updateMatch && method === 'PATCH') return updateProduct(request, env, session, Number(updateMatch[1]));
+  const imageMatch = pathname.match(/^\/api\/products\/(\d+)\/image$/);
+  if (imageMatch && method === 'GET') return getProductImage(env, session, Number(imageMatch[1]));
+  if (imageMatch && method === 'PUT') return uploadProductImage(request, env, session, Number(imageMatch[1]));
   const restockMatch = pathname.match(/^\/api\/products\/(\d+)\/restock$/);
   if (restockMatch && method === 'POST') return restockProduct(request, env, session, Number(restockMatch[1]));
   if (method === 'POST' && pathname === '/api/products/restock-batch') return restockProducts(request, env, session);

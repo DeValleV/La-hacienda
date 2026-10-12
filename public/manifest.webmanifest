@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Gestión La Hacienda",
+  "short_name": "La Hacienda",
+  "description": "Punto de venta para el comedor industrial La Hacienda.",
+  "lang": "es-MX",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#ff6600",
+  "icons": [
+    {
+      "src": "/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

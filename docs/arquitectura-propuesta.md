@@ -21,6 +21,14 @@ Cloudflare Worker
 
 Workers puede desplegar el código y los archivos estáticos como una sola unidad; D1 se enlaza al Worker mediante un *binding*. [Static Assets de Workers](https://developers.cloudflare.com/workers/static-assets/), [D1 Worker Binding API](https://developers.cloudflare.com/d1/worker-api/)
 
+## Operación sin conexión (Hito 2)
+
+La aplicación conserva en IndexedDB una copia por dispositivo de la sucursal: productos, turno vigente y verificadores de contraseña de usuarios activos. Esto permite que un usuario que ya se autenticó en el equipo pueda volver a entrar sin red.
+
+Las ventas, reposiciones y aperturas/cierres de turno se registran primero como operaciones inmutables con UUID y hora local. Al recuperar conexión, `POST /api/offline/sync` las procesa en orden. La tabla `operacion_offline` hace la sincronización idempotente: reenviar una operación confirmada no genera una segunda venta ni vuelve a alterar el inventario.
+
+El servidor sigue siendo la autoridad para precios, productos, permisos, turno y existencias al confirmar. Si una operación no puede aplicarse, permanece en la cola local para reintento y se informa al usuario; nunca se elimina en silencio. Los archivos estáticos se actualizan con estrategia red-primero y usan la caché como respaldo, para evitar que una PWA instalada quede con una interfaz vieja.
+
 ## Límites del modelo
 
 - Cada `producto` pertenece a una única `sucursal`; incluye su propio stock y stock mínimo.
@@ -69,7 +77,7 @@ La interfaz ya no contiene credenciales de demostración. El primer administrado
 | `GET /api/sales?date=AAAA-MM-DD` | Cajero, encargado, administrador | Historial de sólo lectura de un día; incluye todos los turnos visibles de la sucursal. El cajero ve únicamente sus ventas y los demás roles ven su sucursal. |
 | `GET /api/sales/months` y `GET /api/sales/days?month=AAAA-MM` | Cajero, encargado, administrador | Devuelven los meses y días con ventas visibles para el calendario; los días sin ventas no se pueden seleccionar. |
 | `GET /api/shifts/current` | Autenticado | Consulta el turno abierto de la sucursal. |
-| `POST /api/shifts/open` | Encargado, administrador | Abre el turno de la sucursal. |
+| `POST /api/shifts/open` | Cajero, encargado, administrador | Abre el turno de la sucursal. |
 | `POST /api/shifts/current/close` | Encargado, administrador | Cierra el turno abierto. |
 | `POST/PATCH /api/products` | Encargado, administrador | Crea y modifica productos de la sucursal. |
 | `POST /api/products/:id/restock` | Encargado, administrador | Aumenta existencias de un producto de la sucursal. |
@@ -130,7 +138,7 @@ Después de instalar dependencias con `pnpm install`, `pnpm run dev` inicia Work
 - Registros de Worker habilitados y revisión de errores después de cada despliegue. [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
 - Exportación periódica de ventas a Excel (`.xlsx`), guardada fuera de la máquina de operación.
 - Antes de cambios de esquema, verificar recuperación de D1 mediante Time Travel o respaldo disponible en la cuenta.
-- Sin operación sin conexión en la primera versión; una venta sólo se confirma tras respuesta exitosa de la API.
+- Una venta offline es provisional hasta que el servidor confirma su sincronización. La interfaz conserva la hora original de captura y el servidor vuelve a validar sus reglas al aplicarla.
 
 ## Secuencia para el primer despliegue
 

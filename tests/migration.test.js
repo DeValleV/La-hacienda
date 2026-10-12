@@ -36,6 +36,7 @@ test('la migración crea el modelo y conserva el aislamiento por sucursal', () =
   assert.equal(saleColumns.includes('change'), false);
   assert.equal(saleColumns.includes('metodo_pago'), false);
   assert.equal(database.prepare("SELECT COUNT(*) AS total FROM sqlite_master WHERE type = 'table' AND name = 'movimiento_inventario'").get().total, 0);
+  assert.equal(database.prepare("SELECT COUNT(*) AS total FROM sqlite_master WHERE type = 'table' AND name = 'operacion_offline'").get().total, 1);
   assert.equal(database.prepare("SELECT COUNT(*) AS total FROM sqlite_master WHERE type = 'table' AND name = 'unidad_medida'").get().total, 0);
   assert.equal(database.prepare("SELECT COUNT(*) AS total FROM estado WHERE nombre = 'descontinuado'").get().total, 0);
 
