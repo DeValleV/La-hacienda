@@ -57,5 +57,7 @@ test('la aplicación declara los recursos requeridos para la instalación PWA', 
   assert.match(html, /Instalar aplicación en esta tablet/);
   assert.match(scripts, /serviceWorker\.register\('\/sw\.js'\)/);
   assert.doesNotMatch(scripts, /navigator\.onLine/);
-  assert.match(readFileSync(new URL('public/src/styles.css', root), 'utf8'), /\.connection-status\[hidden\] \{ display: none; \}/);
+  assert.match(html, /id="connection-indicator"/);
+  assert.match(html, /id="offline-mode-label"/);
+  assert.match(readFileSync(new URL('public/src/styles.css', root), 'utf8'), /\.connection-indicator\.is-offline/);
 });

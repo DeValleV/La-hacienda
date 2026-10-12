@@ -15,9 +15,6 @@
   <link rel="stylesheet" href="src/sales-summary.css">
 </head>
 <body>
-  <aside id="connection-status" class="connection-status" role="status" hidden>
-    <span aria-hidden="true">●</span><span id="connection-status-text">Sin conexión</span>
-  </aside>
   <aside id="slow-connection" class="slow-connection" role="status" aria-live="polite" hidden>
     <strong>La conexión está tardando más de lo normal.</strong>
     <span>Puede seguir esperando o abrir el modo sin conexión.</span>
@@ -63,7 +60,7 @@
       <button data-view="resumen"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M8 16v-4m4 4V7m4 9v-6"/></svg>Turno</button>
       <button data-view="historial"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg>Historial de ventas</button>
     </nav>
-    <div id="session-user" class="session-user" aria-label="Sesión actual"><button id="activate-offline-mode-sidebar" class="offline-mode-button" type="button">Trabajar sin conexión</button><button id="logout" class="logout-button" type="button">Cerrar sesión</button></div>
+    <div id="session-user" class="session-user" aria-label="Sesión actual"><button id="activate-offline-mode-sidebar" class="offline-mode-button" type="button" role="switch" aria-checked="false"><span>Modo:</span><strong id="offline-mode-label">Online</strong><span class="offline-mode-toggle" aria-hidden="true"></span></button><button id="logout" class="logout-button" type="button">Cerrar sesión</button></div>
     <div class="sidebar-bottom"><button data-view="configuracion"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.24 2.24-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56v.1h-3.16v-.1a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.24-2.24.06-.06A1.7 1.7 0 0 0 6.62 15a1.7 1.7 0 0 0-1.56-1.03h-.1v-3.16h.1A1.7 1.7 0 0 0 6.62 9.8a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.24-2.24.06.06a1.7 1.7 0 0 0 1.88.34 1.7 1.7 0 0 0 1.03-1.56v-.1h3.16v.1a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.24 2.24-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03h.1v3.16h-.1A1.7 1.7 0 0 0 19.4 15z"/></svg>Configuración</button></div>
   </aside>
   <button id="mobile-menu-backdrop" class="mobile-menu-backdrop" type="button" aria-label="Cerrar menú lateral" hidden></button>
@@ -73,7 +70,7 @@
     <header>
       <button class="menu-button sidebar-toggle" id="toggle-sidebar" type="button" aria-label="Ocultar menú lateral" aria-expanded="true">☰</button>
       <div id="sales-header" class="sales-header" hidden>
-        <div><p class="eyebrow">PUNTO DE VENTA</p><div class="sales-title-row"><h1>Sucursal</h1><span class="shift-status">● Caja abierta</span></div></div>
+        <div><p class="eyebrow">PUNTO DE VENTA</p><div class="sales-title-row"><h1>Sucursal</h1><span class="shift-status">● Caja abierta</span><span id="connection-indicator" class="connection-indicator is-online" role="status" aria-label="Modo online" title="Modo online"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2.8 8.7a14 14 0 0 1 18.4 0"/><path d="M5.9 12a9.4 9.4 0 0 1 12.2 0"/><path d="M9.1 15.4a4.8 4.8 0 0 1 5.8 0"/><circle cx="12" cy="19" r="1"/></svg></span></div></div>
       </div>
     </header>
 

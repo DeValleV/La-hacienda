@@ -1707,26 +1707,41 @@ dialog::backdrop {
 
 .login-screen[hidden] { display: none; }
 
-.connection-status {
-  position: fixed;
-  z-index: 40;
-  top: 12px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 12px;
-  border-radius: 999px;
-  background: #3d3027;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+.connection-indicator {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #e8f5ed;
+  color: var(--green);
 }
 
-.connection-status > span:first-child { color: #ffd166; }
-.connection-status.is-online > span:first-child { color: #7ce3a5; }
-.connection-status[hidden] { display: none; }
+.connection-indicator svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.connection-indicator.is-offline {
+  background: #fff0ed;
+  color: var(--danger);
+}
+
+.connection-indicator.is-offline::after {
+  content: '';
+  position: absolute;
+  width: 23px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(-45deg);
+}
 .slow-connection {
   position: fixed;
   z-index: 45;
@@ -1813,7 +1828,43 @@ dialog::backdrop {
 .install-help p { margin: 8px 0 0; }
 .install-help strong { color: var(--navy); }
 .logout-button { width: 100%; margin-top: 8px; padding: 9px 10px; text-align: left; border-top: 1px solid #ead8d1; color: var(--danger); font-weight: 700; }
-.offline-mode-button { width: 100%; padding: 4px 0; text-align: left; color: var(--blue); font-size: 12px; font-weight: 800; }
+.offline-mode-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 0;
+  text-align: left;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+}
+.offline-mode-button strong { color: var(--green); }
+.offline-mode-button[aria-checked="true"] { color: var(--danger); }
+.offline-mode-button[aria-checked="true"] strong { color: var(--danger); }
+.offline-mode-toggle {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: #b9d9c7;
+  transition: background .18s ease;
+}
+.offline-mode-toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 16px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: transform .18s ease;
+}
+.offline-mode-button[aria-checked="true"] .offline-mode-toggle { background: #e4a296; }
+.offline-mode-button[aria-checked="true"] .offline-mode-toggle::after { transform: translateX(-13px); }
 .session-user {
   display: grid;
   gap: 4px;
@@ -2462,6 +2513,8 @@ html.touch-tablet .product-card small {
   }
 
   .sidebar button.offline-mode-button {
+    display: flex;
+    align-items: center;
     border-top: 1px solid #ead8d1;
     color: var(--blue);
   }

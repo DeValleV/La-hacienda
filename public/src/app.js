@@ -56,7 +56,7 @@ class PointOfSaleApp {
     document.getElementById('retry-connection').addEventListener('click', () => this.retryConnection());
     document.getElementById('keep-waiting').addEventListener('click', () => this.hideSlowConnection());
     document.getElementById('activate-offline-mode').addEventListener('click', () => this.activateOfflineMode());
-    document.getElementById('activate-offline-mode-sidebar').addEventListener('click', () => this.activateOfflineMode());
+    document.getElementById('activate-offline-mode-sidebar').addEventListener('click', () => this.toggleOfflineMode());
     document.getElementById('logout').onclick = () => this.logout();
     document.getElementById('export-inventory').onclick = () => this.exportInventory();
     // Algunos navegadores móviles no emiten `online` de forma consistente al
@@ -138,9 +138,8 @@ class PointOfSaleApp {
       else this.showOffline();
       return;
     }
-    const status = document.getElementById('connection-status');
-    status.hidden = true;
     if (this.offlineMode) await this.syncOfflineOperations();
+    this.updateOfflineStatus();
     if (!this.offlineModeRequested && !document.getElementById('offline-screen').hidden) this.initialize();
   }
 
@@ -163,10 +162,7 @@ class PointOfSaleApp {
     document.getElementById('app-shell').hidden = true;
     document.getElementById('login-screen').hidden = true;
     document.getElementById('offline-screen').hidden = false;
-    const status = document.getElementById('connection-status');
-    status.hidden = false;
-    status.classList.remove('is-online');
-    document.getElementById('connection-status-text').textContent = 'Sin conexión';
+    this.updateOfflineStatus();
   }
 
   showSlowConnection() {
@@ -188,6 +184,14 @@ class PointOfSaleApp {
     document.getElementById('offline-title').textContent = 'Modo sin conexión activado';
     document.getElementById('offline-description').textContent = 'Las operaciones se guardarán en este dispositivo y se sincronizarán al recuperar la conexión.';
     this.showOffline();
+  }
+
+  async toggleOfflineMode() {
+    if (this.offlineMode) {
+      await this.handleConnectionChange();
+      return;
+    }
+    this.activateOfflineMode();
   }
 
   bindLogin() {
@@ -487,15 +491,22 @@ class PointOfSaleApp {
   }
 
   async updateOfflineStatus() {
-    const status = document.getElementById('connection-status');
-    const text = document.getElementById('connection-status-text');
-    if (!this.offlineMode) { status.hidden = true; return; }
+    const indicator = document.getElementById('connection-indicator');
+    const toggle = document.getElementById('activate-offline-mode-sidebar');
+    const label = document.getElementById('offline-mode-label');
+    const isOffline = this.offlineMode;
+    indicator.classList.toggle('is-online', !isOffline);
+    indicator.classList.toggle('is-offline', isOffline);
+    indicator.setAttribute('aria-label', isOffline ? 'Modo offline' : 'Modo online');
+    indicator.title = isOffline ? 'Modo offline' : 'Modo online';
+    toggle.setAttribute('aria-checked', String(isOffline));
+    label.textContent = isOffline ? 'Offline' : 'Online';
+    if (!isOffline) return;
     const pending = this.currentSession
       ? (await this.offlineStore.pendingForUser(this.currentSession.userId)).length
       : await this.offlineStore.countPending();
-    status.hidden = false;
-    status.classList.remove('is-online');
-    text.textContent = `Sin conexión · ${pending} operación${pending === 1 ? '' : 'es'} pendiente${pending === 1 ? '' : 's'}`;
+    indicator.setAttribute('aria-label', `Modo offline: ${pending} operación${pending === 1 ? '' : 'es'} pendiente${pending === 1 ? '' : 's'}`);
+    indicator.title = `Modo offline · ${pending} operación${pending === 1 ? '' : 'es'} pendiente${pending === 1 ? '' : 's'}`;
   }
 
   async refundSale(saleId) {
