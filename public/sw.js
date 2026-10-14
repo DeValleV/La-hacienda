@@ -1,7 +1,7 @@
-const CACHE_VERSION = 'la-hacienda-shell-v8';
+const CACHE_VERSION = 'la-hacienda-shell-v9';
 const APP_SHELL = [
   '/', '/index.html', '/offline.html', '/manifest.webmanifest', '/icons/app-icon.svg',
-  '/src/styles.css', '/src/inventory.css', '/src/sales-summary.css',
+  '/src/styles.css', '/src/inventory.css', '/src/sales-summary.css', '/src/release.js',
   '/src/excel.js', '/src/api.js', '/src/offline.js', '/src/app.js', '/src/pwa.js',
   '/src/views/InventoryView.js', '/src/views/SalesView.js', '/src/views/ShiftSummaryView.js',
   '/src/views/HistoryView.js', '/src/views/SettingsView.js',

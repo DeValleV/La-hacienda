@@ -1882,6 +1882,9 @@ dialog::backdrop {
 .session-user strong { color: var(--navy); font-size: 13px; }
 .session-user span { text-transform: capitalize; }
 .sidebar-bottom { margin-top: 0; }
+.app-version { color: var(--muted); font-size: 11px; }
+.login-version { margin: 0; text-align: center; }
+.sidebar-version { padding: 10px 12px 0; text-align: center; }
 .app-loading { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(255,255,255,.72); color: var(--navy); font-weight: 800; backdrop-filter: blur(2px); }
 .app-loading[hidden] { display: none; }
 .settings-tabs { display: flex; gap: 8px; margin-bottom: 16px; }

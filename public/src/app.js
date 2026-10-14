@@ -6,6 +6,9 @@ const formatMoney = (amount) => new Intl.NumberFormat('es-MX', {
 
 class PointOfSaleApp {
   constructor() {
+    document.querySelectorAll('[data-app-version]').forEach((element) => {
+      element.textContent = `v${APP_RELEASE_VERSION}`;
+    });
     this.syncTouchTabletLayout();
     window.addEventListener('resize', () => this.syncTouchTabletLayout());
     window.addEventListener('online', () => this.handleConnectionChange());
