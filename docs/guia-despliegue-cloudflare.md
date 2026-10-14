@@ -52,7 +52,7 @@ Las reglas del modelo están explicadas en [database-schema.md](database-schema.
 | `src/worker.js` | API, autorización, sesión, ventas y reglas de negocio. |
 | `src/auth.js` | Hash de contraseñas, tokens y cookies de sesión. |
 | `migrations/` | Esquema inicial, restricciones, triggers, datos semilla y cambios versionados. |
-| `wrangler.toml` | Nombres de Workers, assets y bindings D1 por entorno. |
+| `wrangler.example.toml` | Plantilla versionada de Workers, assets y bindings D1 por entorno. |
 | `.dev.vars` | Secreto local. No existe en Git y no se debe subir. |
 
 La migración de producción crea únicamente la sucursal `Ikano` y las categorías `Alimentos`, `Bebidas`, `Postres` y `Botanas`. No contiene usuarios, contraseñas ni productos; el administrador inicial se crea mediante el flujo de inicialización.
@@ -156,7 +156,7 @@ pnpm exec wrangler d1 create la-hacienda
 
 Cada comando imprime `database_name` y `database_id`. Si ofrece modificar el archivo automáticamente, elige **No**: el proyecto ya define ambos entornos.
 
-Edita [wrangler.toml](../wrangler.toml):
+Copia [wrangler.example.toml](../wrangler.example.toml) como `wrangler.toml` y edita la copia local:
 
 | Placeholder actual | Sustituir por |
 | --- | --- |
@@ -213,13 +213,13 @@ Antes de producción, realiza esta lista con cuentas reales de prueba:
 - Exportación Excel (`.xlsx`) de inventario y del historial del día seleccionado.
 - Cierre de turno con usuario y fecha correctos.
 
-Revisa errores en **Workers & Pages → Worker → Observability/Logs**. El proyecto habilita observabilidad en `wrangler.toml`.
+Revisa errores en **Workers & Pages → Worker → Observability/Logs**. El proyecto habilita observabilidad en tu `wrangler.toml` local.
 
 ## 7. Completar el flujo remoto: producción
 
 Sólo después de completar staging:
 
-1. Confirma una última vez que el ID de producción en `wrangler.toml` pertenece a `la-hacienda`, no a staging.
+1. Confirma una última vez que el ID de producción en tu `wrangler.toml` local pertenece a producción, no a staging.
 2. Aplica la migración a producción:
 
    ```bash
@@ -260,7 +260,7 @@ No uses una Route para este caso salvo que el hostname ya tenga un servidor de o
 
 | Síntoma | Causa probable | Acción |
 | --- | --- | --- |
-| `database_id` inválido o Worker sin `env.DB` | IDs de staging/producción invertidos o placeholders sin sustituir. | Revisa exactamente los dos bloques D1 de `wrangler.toml`. |
+| `database_id` inválido o Worker sin `env.DB` | IDs de staging/producción invertidos o placeholders sin sustituir. | Revisa exactamente los dos bloques D1 de tu `wrangler.toml` local. |
 | Login devuelve error interno tras desplegar | No se aplicó la migración remota. | Ejecuta la migración del entorno correcto y revisa Logs. |
 | No hay sucursales en el selector de login | Migración no aplicada o sucursales desactivadas. | Consulta `sucursal` con `wrangler d1 execute`. |
 | No se puede crear el primer administrador | Falta `BOOTSTRAP_TOKEN`, es distinto al header o ya fue eliminado. | Configura temporalmente el secreto y verifica la URL/entorno. |

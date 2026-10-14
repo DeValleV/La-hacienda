@@ -18,7 +18,7 @@ pnpm exec wrangler d1 create la-hacienda-staging
 pnpm exec wrangler d1 create la-hacienda
 ```
 
-Sustituye los valores de `database_id` en `wrangler.toml` con los UUID que devuelva Cloudflare. Staging usa `la-hacienda-staging`; producción usa `la-hacienda`. No continúes hasta que ambos bindings `DB` apunten a sus D1 correspondientes.
+Copia `wrangler.example.toml` como `wrangler.toml` y sustituye los valores `REEMPLAZAR_*` con los recursos de tu cuenta de Cloudflare. `wrangler.toml` es local y no se sube a Git. No continúes hasta que ambos bindings `DB` apunten a sus D1 correspondientes.
 
 ## Staging
 

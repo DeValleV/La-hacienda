@@ -102,7 +102,7 @@ public/                  interfaz estática publicada por el Worker
 src/worker.js            API, autorización y reglas de negocio
 src/auth.js              contraseñas, tokens y cookies de sesión
 migrations/                 esquema, índices, restricciones, triggers, semillas y cambios versionados
-wrangler.toml            Worker, assets y bindings de producción/staging
+wrangler.example.toml    Plantilla del Worker, assets y bindings de producción/staging
 server.js                servidor estático local; no sustituye la API
 ```
 

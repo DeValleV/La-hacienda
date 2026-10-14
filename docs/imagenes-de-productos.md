@@ -4,7 +4,7 @@ Las imágenes son opcionales. Un producto sin imagen conserva la tarjeta de colo
 
 ## Configuración inicial
 
-Antes del primer despliegue, cree los buckets que están declarados en `wrangler.toml`:
+Antes del primer despliegue, cree los buckets que configuró en su `wrangler.toml` local (partiendo de `wrangler.example.toml`):
 
 ```bash
 pnpm exec wrangler r2 bucket create la-hacienda-product-images
