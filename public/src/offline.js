@@ -55,7 +55,9 @@ class OfflineStore {
       const request = db.transaction('operations').objectStore('operations').getAll();
       // Un error del servidor no elimina la operación ni la vuelve invisible.
       // Así puede reintentarse cuando cambien las condiciones que la bloquearon.
-      request.onsuccess = () => resolve(request.result.filter((item) => item.status !== 'applied'));
+      request.onsuccess = () => resolve(request.result
+        .filter((item) => item.status !== 'applied')
+        .sort((first, second) => new Date(first.occurredAt) - new Date(second.occurredAt)));
       request.onerror = () => reject(request.error);
     });
   }
@@ -75,6 +77,15 @@ class OfflineStore {
         resolve();
       };
       get.onerror = () => reject(get.error);
+    });
+  }
+
+  async remove(id) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('operations', 'readwrite').objectStore('operations').delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
     });
   }
 

@@ -86,3 +86,24 @@ test('la migración crea el modelo y conserva el aislamiento por sucursal', () =
 
   database.close();
 });
+
+test('una venta histórica offline se conserva aunque el turno ya cerró o exceda el inventario', () => {
+  const database = createDatabase();
+  database.prepare('INSERT INTO turno (sucursal_id, abierto_por_usuario_id) VALUES (?, ?)').run(1, 1);
+  database.prepare("UPDATE turno SET estado = 'cerrado', cerrado_por_usuario_id = 1, fecha_cierre = CURRENT_TIMESTAMP WHERE id = 1").run();
+
+  database.prepare(`
+    INSERT INTO venta (id, sucursal_id, turno_id, tipo_venta_id, usuario_id, origen_offline)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `).run(2001, 1, 1, 1, 1);
+  database.prepare(`
+    INSERT INTO detalle_venta (venta_id, producto_id, cantidad, nombre_producto, precio_unitario_centavos)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(2001, 1, 70, 'Menú del Día', 550);
+
+  const product = database.prepare('SELECT stock, stock_sobregirado FROM producto WHERE id = 1').get();
+  assert.equal(product.stock, 0);
+  assert.equal(product.stock_sobregirado, 6);
+  assert.equal(database.prepare('SELECT total_centavos FROM venta WHERE id = 2001').get().total_centavos, 38500);
+  database.close();
+});

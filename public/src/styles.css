@@ -1239,6 +1239,8 @@ dialog {
 .sale-refunded td { background: #fff2f0 !important; color: #9f3028; text-decoration: line-through; }
 .sale-refunded .sale-type, .sale-refunded .refunded-label { text-decoration: none; }
 .sale-refunded .refunded-label { color: #b3261e; }
+.sale-pending td { background: #fff8e7 !important; }
+.pending-label { display: block; margin-top: 4px; color: #9b6500; font-size: 11px; font-weight: 800; }
 
 .history-shift summary {
   display: flex;

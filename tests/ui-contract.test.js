@@ -53,6 +53,9 @@ test('la aplicación declara los recursos requeridos para la instalación PWA', 
   assert.match(html, /id="activate-offline-mode"/);
   assert.match(scripts, /activate-offline-mode-sidebar/);
   assert.match(scripts, /class OfflineStore/);
+  assert.match(scripts, /async remove\(id\)/);
+  assert.match(scripts, /pendingSync: true/);
+  assert.match(scripts, /restorePendingOfflineSales/);
   assert.match(html, /id="update-available"/);
   assert.match(html, /Instalar aplicación en esta tablet/);
   assert.match(scripts, /serviceWorker\.register\('\/sw\.js'\)/);

@@ -24,7 +24,7 @@ class HistoryView {
     });
     document.getElementById('history-shifts').addEventListener('click', (event) => {
       const button = event.target.closest('[data-refund-sale]');
-      if (button) this.openRefund(Number(button.dataset.refundSale));
+      if (button) this.openRefund(button.dataset.refundSale);
     });
     document.getElementById('refund-submit').onclick = () => this.submitRefund();
   }
@@ -52,6 +52,13 @@ class HistoryView {
   setDaySales(sales, shifts = []) {
     this.daySales = sales;
     this.dayShifts = shifts;
+    this.render();
+  }
+
+  addProvisionalSale(sale) {
+    const saleDate = String(sale.date).slice(0, 10);
+    if (this.selectedDate !== saleDate) return;
+    this.daySales = [sale, ...this.daySales.filter((item) => item.operationId !== sale.operationId)];
     this.render();
   }
 
@@ -200,7 +207,7 @@ class HistoryView {
       return `<details class="panel history-shift${active ? ' active-shift' : ''}" open>
         <summary><div><strong>Turno #${shift.dailyNumber ?? turnId}</strong><span class="muted">De ${firstTime} a ${lastTime}</span></div><div class="shift-quick-stats"><span class="shift-sales-count">${sales.length} ventas</span><span class="shift-type-total"><small>Comedor</small><strong>${this.formatMoney(typeTotals.COMEDOR)}</strong></span><span class="shift-type-total"><small>Facturada</small><strong>${this.formatMoney(typeTotals.FACTURADA)}</strong></span><span class="shift-type-total"><small>Personal</small><strong>${this.formatMoney(typeTotals.PERSONAL)}</strong></span><span class="shift-grand-total"><small>Total</small><strong>${this.formatMoney(total)}</strong></span></div></summary>
         <div class="table-wrap"><table><thead><tr><th>HORA</th><th>USUARIO</th><th>TIPO</th><th>PRODUCTOS Y CANTIDADES</th><th>TOTAL</th><th aria-label="Reembolso"></th></tr></thead><tbody>
-          ${sales.length ? newestSalesFirst.map((sale) => { const refunded = sale.lines.every((line) => line.qty === (line.refundedQty || 0)); return `<tr class="${refunded ? 'sale-refunded' : ''}"><td>${escapeHtml(this.formatTime(sale.date))}</td><td>${escapeHtml(sale.userName)}</td><td><span class="sale-type sale-type-${sale.tipoVenta.toLowerCase()}">${escapeHtml(this.getSaleTypeLabel(sale.tipoVenta))}</span></td><td><div class="history-lines">${sale.lines.map((line) => `<div><span>${escapeHtml(line.productName)}</span><span class="muted">× ${line.qty}</span></div>`).join('')}</div></td><td class="sale-total"><strong>${this.formatMoney(sale.total)}</strong></td><td class="sale-refund">${refunded ? '<span class="refunded-label">Reembolsado</span>' : active ? `<button class="refund-action" data-refund-sale="${sale.id}">Reembolsar</button>` : ''}</td></tr>`; }).join('') : '<tr><td colspan="6" class="muted">Este turno no registró ventas.</td></tr>'}
+          ${sales.length ? newestSalesFirst.map((sale) => { const refunded = sale.lines.every((line) => line.qty === (line.refundedQty || 0)); const pending = Boolean(sale.pendingSync); const pendingText = sale.syncError ? `Requiere revisión: ${escapeHtml(sale.syncError)}` : 'Pendiente de sincronizar'; const refundText = sale.pendingRefund ? '<span class="pending-label">Reembolso pendiente</span>' : refunded ? '<span class="refunded-label">Reembolsado</span>' : `<button class="refund-action" data-refund-sale="${sale.id}">Reembolsar</button>`; return `<tr class="${refunded ? 'sale-refunded' : ''}${pending ? ' sale-pending' : ''}"><td>${escapeHtml(this.formatTime(sale.date))}</td><td>${escapeHtml(sale.userName)}</td><td><span class="sale-type sale-type-${sale.tipoVenta.toLowerCase()}">${escapeHtml(this.getSaleTypeLabel(sale.tipoVenta))}</span></td><td><div class="history-lines">${sale.lines.map((line) => `<div><span>${escapeHtml(line.productName)}</span><span class="muted">× ${line.qty}</span></div>`).join('')}</div></td><td class="sale-total"><strong>${this.formatMoney(sale.total)}</strong>${pending ? `<small class="pending-label">${pendingText}</small>` : ''}</td><td class="sale-refund">${refundText}</td></tr>`; }).join('') : '<tr><td colspan="6" class="muted">Este turno no registró ventas.</td></tr>'}
         </tbody></table></div>
       </details>`;
     }).join('');
@@ -213,7 +220,7 @@ class HistoryView {
       return [
         sale.turnId, this.formatTime(sale.date), sale.userName, this.getSaleTypeLabel(sale.tipoVenta),
         sale.lines.map((line) => `${line.productName} ×${line.qty}`).join('\n'), sale.total,
-        refunded ? 'Reembolsada' : 'Confirmada',
+        sale.pendingSync ? 'Pendiente de sincronizar' : refunded ? 'Reembolsada' : 'Confirmada',
       ];
     });
     window.downloadXlsx(`historial-ventas-${this.selectedDate}.xlsx`, [{
@@ -226,7 +233,7 @@ class HistoryView {
   }
 
   openRefund(saleId) {
-    this.refundSale = this.daySales.find((sale) => sale.id === saleId);
+    this.refundSale = this.daySales.find((sale) => String(sale.id) === String(saleId));
     if (!this.refundSale) return;
     document.getElementById('refund-dialog').showModal();
   }

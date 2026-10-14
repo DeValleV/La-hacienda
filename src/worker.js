@@ -393,6 +393,35 @@ async function offlineBootstrap(env, session) {
   } });
 }
 
+async function offlineActor(env, session, operation) {
+  const userId = requireInteger(operation.actor?.userId, 'usuario', 1);
+  const actor = await env.DB.prepare(`
+    SELECT u.id, r.nombre AS role FROM usuario u JOIN rol r ON r.id = u.rol_id
+    WHERE u.id = ? AND u.sucursal_id = ?
+  `).bind(userId, session.branchId).first();
+  if (!actor) throw new ApiError(400, 'El usuario original no pertenece a esta sucursal.', 'VALIDATION_ERROR');
+  return actor;
+}
+
+async function offlineTurn(env, session, operation) {
+  const requestedId = Number(operation.payload?.offlineContext?.turnId);
+  let shift = Number.isInteger(requestedId) && requestedId > 0
+    ? await env.DB.prepare('SELECT id FROM turno WHERE id = ? AND sucursal_id = ?').bind(requestedId, session.branchId).first()
+    : null;
+  if (!shift) {
+    shift = await env.DB.prepare('SELECT id FROM turno WHERE sucursal_id = ? ORDER BY fecha_apertura DESC LIMIT 1')
+      .bind(session.branchId).first();
+  }
+  if (shift) return shift;
+
+  // Una sucursal sin turnos previos no impide recuperar una venta real.
+  const result = await env.DB.prepare(`
+    INSERT INTO turno (sucursal_id, abierto_por_usuario_id, cerrado_por_usuario_id, fecha_apertura, fecha_cierre, estado)
+    VALUES (?, ?, ?, ?, ?, 'cerrado')
+  `).bind(session.branchId, session.userId, session.userId, operation.occurredAt, operation.occurredAt).run();
+  return { id: result.meta.last_row_id };
+}
+
 async function createOfflineSale(env, session, operation) {
   const payload = operation.payload || {};
   const type = requireText(payload.tipoVenta, 'tipo de venta', 30).toLowerCase();
@@ -401,32 +430,32 @@ async function createOfflineSale(env, session, operation) {
   const quantities = new Map();
   rawLines.forEach((line) => {
     const productId = requireInteger(line.productId, 'producto', 1);
-    quantities.set(productId, (quantities.get(productId) || 0) + requireInteger(line.qty, 'cantidad', 1));
+    const current = quantities.get(productId) || { quantity: 0, name: null, priceCents: null };
+    current.quantity += requireInteger(line.qty, 'cantidad', 1);
+    if (typeof line.productName === 'string' && line.productName.trim()) current.name = line.productName.trim().slice(0, 120);
+    if (Number.isInteger(line.priceCents) && line.priceCents >= 0) current.priceCents = line.priceCents;
+    quantities.set(productId, current);
   });
   const saleType = await env.DB.prepare('SELECT id FROM tipo_venta WHERE nombre = ?').bind(type).first();
-  const shift = await env.DB.prepare("SELECT id FROM turno WHERE sucursal_id = ? AND estado = 'abierto'").bind(session.branchId).first();
-  if (!saleType || !shift) throw new ApiError(409, 'No hay un turno abierto para sincronizar la venta.', 'NO_OPEN_SHIFT');
+  if (!saleType) throw new ApiError(400, 'Tipo de venta no válido.', 'VALIDATION_ERROR');
+  const [actor, shift] = await Promise.all([offlineActor(env, session, operation), offlineTurn(env, session, operation)]);
   const saleId = randomSaleId();
   const statements = [
-    env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en) VALUES (?, ?, ?, ?, ?)')
-      .bind(operation.id, session.branchId, session.userId, 'sale', operation.occurredAt),
-    env.DB.prepare('INSERT INTO venta (id, sucursal_id, turno_id, tipo_venta_id, usuario_id, fecha_hora) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(saleId, session.branchId, shift.id, saleType.id, session.userId, operation.occurredAt),
+    env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en, venta_id) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(operation.id, session.branchId, actor.id, 'sale', operation.occurredAt, saleId),
+    env.DB.prepare('INSERT INTO venta (id, sucursal_id, turno_id, tipo_venta_id, usuario_id, fecha_hora, origen_offline) VALUES (?, ?, ?, ?, ?, ?, 1)')
+      .bind(saleId, session.branchId, shift.id, saleType.id, actor.id, operation.occurredAt),
   ];
-  quantities.forEach((quantity, productId) => statements.push(env.DB.prepare(`
+  quantities.forEach((line, productId) => statements.push(env.DB.prepare(`
     INSERT INTO detalle_venta (venta_id, producto_id, cantidad, nombre_producto, precio_unitario_centavos)
-    VALUES (?, ?, ?, (SELECT nombre_base FROM producto WHERE id = ?), (SELECT precio_centavos FROM producto WHERE id = ?))
-  `).bind(saleId, productId, quantity, productId, productId)));
-  try { await env.DB.batch(statements); }
-  catch (error) {
-    if (String(error).includes('PRODUCTO_NO_DISPONIBLE')) throw new ApiError(409, 'Un producto ya no tiene stock suficiente.', 'INSUFFICIENT_STOCK');
-    throw error;
-  }
+    VALUES (?, ?, ?, COALESCE(?, (SELECT nombre_base FROM producto WHERE id = ?)), COALESCE(?, (SELECT precio_centavos FROM producto WHERE id = ?)))
+  `).bind(saleId, productId, line.quantity, line.name, productId, line.priceCents, productId)));
+  await env.DB.batch(statements);
   return saleId;
 }
 
 async function applyOfflineRestock(env, session, operation) {
-  requireSession(session, PRODUCT_ROLES);
+  const actor = await offlineActor(env, session, operation);
   const items = Array.isArray(operation.payload?.items) ? operation.payload.items : [];
   if (!items.length || items.length > 100) throw new ApiError(400, 'Reposición offline no válida.', 'VALIDATION_ERROR');
   const quantities = new Map();
@@ -442,17 +471,17 @@ async function applyOfflineRestock(env, session, operation) {
     throw new ApiError(404, 'Uno de los productos ya no existe o pertenece a otra sucursal.', 'NOT_FOUND');
   }
   const statements = [env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en) VALUES (?, ?, ?, ?, ?)')
-    .bind(operation.id, session.branchId, session.userId, 'restock', operation.occurredAt)];
+    .bind(operation.id, session.branchId, actor.id, 'restock', operation.occurredAt)];
   quantities.forEach((quantity, productId) => statements.push(env.DB.prepare('UPDATE producto SET stock = stock + ? WHERE id = ? AND sucursal_id = ?')
     .bind(quantity, productId, session.branchId)));
   await env.DB.batch(statements);
 }
 
 async function applyOfflineShift(env, session, operation) {
-  requireSession(session, PRODUCT_ROLES);
+  const actor = await offlineActor(env, session, operation);
   const isOpen = operation.type === 'shift-open';
   const statements = [env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en) VALUES (?, ?, ?, ?, ?)')
-    .bind(operation.id, session.branchId, session.userId, operation.type, operation.occurredAt)];
+    .bind(operation.id, session.branchId, actor.id, operation.type, operation.occurredAt)];
   if (isOpen) {
     statements.push(env.DB.prepare("INSERT INTO turno (sucursal_id, abierto_por_usuario_id, fecha_apertura, estado) VALUES (?, ?, ?, 'abierto')")
       .bind(session.branchId, session.userId, operation.occurredAt));
@@ -463,10 +492,38 @@ async function applyOfflineShift(env, session, operation) {
   await env.DB.batch(statements);
 }
 
+async function applyOfflineRefund(env, session, operation, saleIds) {
+  const actor = await offlineActor(env, session, operation);
+  const requestedSaleId = Number(operation.payload?.saleId);
+  const sourceOperationId = operation.payload?.saleOperationId;
+  const sourceSaleId = typeof sourceOperationId === 'string'
+    ? saleIds.get(sourceOperationId) || (await env.DB.prepare('SELECT venta_id AS saleId FROM operacion_offline WHERE operation_id = ?').bind(sourceOperationId).first())?.saleId
+    : null;
+  const saleId = Number.isInteger(requestedSaleId) && requestedSaleId > 0 ? requestedSaleId : Number(sourceSaleId);
+  if (!Number.isInteger(saleId) || saleId < 1) throw new ApiError(400, 'No se encontró la venta a reembolsar.', 'VALIDATION_ERROR');
+  const sale = await env.DB.prepare('SELECT id FROM venta WHERE id = ? AND sucursal_id = ?').bind(saleId, session.branchId).first();
+  if (!sale) throw new ApiError(404, 'La venta a reembolsar no existe.', 'NOT_FOUND');
+  const existing = await env.DB.prepare('SELECT id FROM reembolso WHERE venta_id = ?').bind(saleId).first();
+  const statements = [env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en) VALUES (?, ?, ?, ?, ?)')
+    .bind(operation.id, session.branchId, actor.id, 'refund', operation.occurredAt)];
+  if (!existing) {
+    const lines = await env.DB.prepare('SELECT producto_id AS productId, cantidad AS qty FROM detalle_venta WHERE venta_id = ?').bind(saleId).all();
+    const refundId = crypto.getRandomValues(new Uint32Array(1))[0] || 1;
+    statements.push(env.DB.prepare('INSERT INTO reembolso (id, venta_id, usuario_id, fecha) VALUES (?, ?, ?, ?)')
+      .bind(refundId, saleId, actor.id, operation.occurredAt));
+    lines.results.forEach((line) => {
+      statements.push(env.DB.prepare('INSERT INTO detalle_reembolso (reembolso_id, producto_id, cantidad) VALUES (?, ?, ?)').bind(refundId, line.productId, line.qty));
+      statements.push(env.DB.prepare('UPDATE producto SET stock = stock + ? WHERE id = ? AND sucursal_id = ?').bind(line.qty, line.productId, session.branchId));
+    });
+  }
+  await env.DB.batch(statements);
+}
+
 async function syncOffline(request, env, session) {
   const operations = (await bodyJson(request)).operations;
   if (!Array.isArray(operations) || operations.length > 100) throw new ApiError(400, 'Operaciones sin conexión no válidas.', 'VALIDATION_ERROR');
   const results = [];
+  const saleIds = new Map();
   for (const operation of operations) {
     const id = requireText(operation?.id, 'operación', 80);
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
@@ -477,21 +534,21 @@ async function syncOffline(request, env, session) {
       results.push({ id, status: 'error', code: 'VALIDATION_ERROR', message: 'La hora de la operación no es válida.' });
       continue;
     }
-    if (requireInteger(operation.actor?.userId, 'usuario', 1) !== session.userId) {
-      results.push({ id, status: 'error', code: 'FORBIDDEN', message: 'Inicie sesión con el usuario que registró esta operación para sincronizarla.' });
-      continue;
-    }
     const known = await env.DB.prepare('SELECT operation_id FROM operacion_offline WHERE operation_id = ?').bind(id).first();
     if (known) { results.push({ id, status: 'applied', duplicate: true }); continue; }
     try {
       if (operation.type === 'sale') {
         const saleId = await createOfflineSale(env, session, operation);
+        saleIds.set(id, saleId);
         results.push({ id, status: 'applied', saleId });
       } else if (operation.type === 'restock') {
         await applyOfflineRestock(env, session, operation);
         results.push({ id, status: 'applied' });
       } else if (operation.type === 'shift-open' || operation.type === 'shift-close') {
         await applyOfflineShift(env, session, operation);
+        results.push({ id, status: 'applied' });
+      } else if (operation.type === 'refund') {
+        await applyOfflineRefund(env, session, operation, saleIds);
         results.push({ id, status: 'applied' });
       } else throw new ApiError(400, 'Tipo de operación offline no soportado.', 'VALIDATION_ERROR');
     } catch (error) {

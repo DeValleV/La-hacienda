@@ -334,6 +334,7 @@ class PointOfSaleApp {
     this.shiftSummary.setShift(this.currentShift);
     this.syncShiftUi();
     this.offlineMode = true;
+    await this.restorePendingOfflineSales();
     this.renderAll();
     this.updateOfflineStatus();
     this.showView('ventas');
@@ -420,15 +421,30 @@ class PointOfSaleApp {
 
   async checkout(sale) {
     if (this.offlineMode) {
-      const operation = await this.offlineStore.enqueue('sale', sale, { userId: this.currentSession.userId });
+      const offlineSale = {
+        ...sale,
+        offlineContext: { turnId: this.currentShift?.id },
+        lines: sale.lines.map((line) => {
+          const product = products.find((item) => item.id === line.productId);
+          return {
+            ...line,
+            productName: product?.name || `Producto #${line.productId}`,
+            priceCents: Math.round((product?.price || 0) * 100),
+          };
+        }),
+      };
+      const operation = await this.offlineStore.enqueue('sale', offlineSale, { userId: this.currentSession.userId });
       sale.lines.forEach((line) => {
         const product = products.find((item) => item.id === line.productId);
         if (product) product.stock = Math.max(0, product.stock - line.qty);
       });
       await this.offlineStore.saveSnapshot({ ...(await this.offlineStore.snapshot()), products });
+      const provisionalSale = this.provisionalSale(operation, offlineSale);
+      salesHistory.unshift(provisionalSale);
+      this.history.addProvisionalSale(provisionalSale);
       this.renderAll();
       this.updateOfflineStatus();
-      this.showToast(`Venta guardada sin conexión (${operation.id.slice(0, 8)}).`);
+      this.showToast(`Venta pendiente de sincronizar (${operation.id.slice(0, 8)}).`);
       return;
     }
     await this.api.createSale(sale);
@@ -455,6 +471,42 @@ class PointOfSaleApp {
     this.showToast('Sin conexión: los cambios nuevos se guardarán localmente.');
   }
 
+  provisionalSale(operation, sale) {
+    const lines = sale.lines.map((line) => {
+      const product = products.find((item) => item.id === line.productId);
+      return {
+        productId: line.productId,
+        productName: product?.name || `Producto #${line.productId}`,
+        qty: line.qty,
+        refundedQty: 0,
+        price: product?.price || 0,
+      };
+    });
+    return {
+      id: `offline-${operation.id}`,
+      operationId: operation.id,
+      turnId: this.currentShift?.id || 'offline',
+      tipoVenta: sale.tipoVenta.toUpperCase(),
+      date: operation.occurredAt,
+      total: lines.reduce((sum, line) => sum + (line.price * line.qty), 0),
+      status: 'pendiente',
+      pendingSync: true,
+      syncError: operation.error || null,
+      userName: this.currentSession.username,
+      lines,
+    };
+  }
+
+  async restorePendingOfflineSales() {
+    const operations = await this.offlineStore.pendingForUser(this.currentSession.userId);
+    const localSales = operations
+      .filter((operation) => operation.type === 'sale')
+      .sort((first, second) => new Date(second.occurredAt) - new Date(first.occurredAt))
+      .map((operation) => this.provisionalSale(operation, operation.payload));
+    const confirmedSales = salesHistory.filter((sale) => !sale.pendingSync);
+    salesHistory.splice(0, salesHistory.length, ...localSales, ...confirmedSales);
+  }
+
   async syncOfflineOperations() {
     if (this.syncingOffline || !this.currentSession) return;
     this.syncingOffline = true;
@@ -466,10 +518,19 @@ class PointOfSaleApp {
         return;
       }
       const { results } = await this.api.syncOffline(operations);
-      for (const result of results) await this.offlineStore.mark(result.id, result.status === 'applied' ? 'applied' : 'error', result.message || null);
+      for (const result of results) {
+        if (result.status === 'applied') await this.offlineStore.remove(result.id);
+        else await this.offlineStore.mark(result.id, 'error', result.message || 'La operación fue rechazada por el servidor.');
+      }
       const failed = results.filter((result) => result.status === 'error');
       if (failed.length) {
-        this.showToast(`${failed.length} operación(es) requieren revisión antes de sincronizar.`);
+        failed.forEach((result) => {
+          const localSale = salesHistory.find((sale) => sale.operationId === result.id);
+          if (localSale) localSale.syncError = result.message || 'El servidor rechazó la operación.';
+        });
+        this.renderAll();
+        const detail = failed[0].message || 'El servidor rechazó la operación.';
+        this.showToast(`${failed.length} operación(es) requieren revisión: ${detail}`);
       } else {
         this.offlineMode = false;
         this.offlineModeRequested = false;
@@ -483,7 +544,7 @@ class PointOfSaleApp {
         this.showToast(`${results.length} operación(es) sincronizadas.`);
       }
     } catch (error) {
-      this.showToast('No se pudo sincronizar todavía. Las operaciones siguen seguras en este dispositivo.');
+      this.showToast(`No se pudo sincronizar. Las operaciones siguen seguras: ${error.message}`);
     } finally {
       this.syncingOffline = false;
       this.updateOfflineStatus();
@@ -507,9 +568,29 @@ class PointOfSaleApp {
       : await this.offlineStore.countPending();
     indicator.setAttribute('aria-label', `Modo offline: ${pending} operación${pending === 1 ? '' : 'es'} pendiente${pending === 1 ? '' : 's'}`);
     indicator.title = `Modo offline · ${pending} operación${pending === 1 ? '' : 'es'} pendiente${pending === 1 ? '' : 's'}`;
+    label.textContent = `Offline · ${pending} pendiente${pending === 1 ? '' : 's'}`;
   }
 
   async refundSale(saleId) {
+    if (this.offlineMode) {
+      const sale = salesHistory.find((item) => String(item.id) === String(saleId))
+        || this.history.daySales.find((item) => String(item.id) === String(saleId));
+      if (!sale) throw new Error('No se encontró la venta que desea reembolsar.');
+      const operation = await this.offlineStore.enqueue('refund', {
+        saleId: Number.isInteger(sale.id) ? sale.id : null,
+        saleOperationId: sale.operationId || null,
+      }, { userId: this.currentSession.userId });
+      sale.lines.forEach((line) => {
+        const product = products.find((item) => item.id === line.productId);
+        if (product) product.stock += line.qty;
+      });
+      sale.pendingRefund = true;
+      await this.offlineStore.saveSnapshot({ ...(await this.offlineStore.snapshot()), products });
+      this.renderAll();
+      this.updateOfflineStatus();
+      this.showToast(`Reembolso pendiente de sincronizar (${operation.id.slice(0, 8)}).`);
+      return;
+    }
     await this.api.refundSale(saleId);
     await Promise.all([this.refreshData(), this.loadHistory(true)]);
     this.showToast('Reembolso registrado e inventario actualizado.');
