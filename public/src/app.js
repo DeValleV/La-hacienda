@@ -260,23 +260,34 @@ class PointOfSaleApp {
       this.syncShiftUi();
       await Promise.all([this.refreshData(), this.loadHistory()]);
       if (user.role === 'administrador') await this.settings.load();
-      // La sesión en línea no debe fallar sólo porque se perdió la conexión al
-      // momento de actualizar la copia offline.
-      try {
-        const { snapshot } = await this.api.getOfflineBootstrap();
-        await this.offlineStore.saveSnapshot(snapshot);
-      } catch (error) {
-        console.warn('No se pudo actualizar la copia offline.', error);
+      const pendingOperations = await this.offlineStore.pendingForUser(user.userId);
+      // Una cuenta distinta no debe enviar operaciones capturadas por otro
+      // usuario. Primero se restauran en pantalla sus ventas locales: si la
+      // sincronización falla, nunca deben parecer desaparecidas.
+      if (pendingOperations.length) {
+        this.offlineMode = true;
+        await this.restorePendingOfflineShift(pendingOperations);
+        await this.restorePendingOfflineSales();
+        await this.syncOfflineOperations();
+        if (this.offlineMode) {
+          await this.restorePendingOfflineShift();
+          await this.restorePendingOfflineSales();
+          this.renderAll();
+        }
+      } else {
+        // Sólo una copia limpia puede reemplazar el estado local. Si hay
+        // operaciones pendientes, este bootstrap podría borrar el turno
+        // provisional de la tablet antes de que alcance a sincronizarse.
+        try {
+          const { snapshot } = await this.api.getOfflineBootstrap();
+          await this.offlineStore.saveSnapshot(snapshot);
+        } catch (error) {
+          console.warn('No se pudo actualizar la copia offline.', error);
+        }
+        this.offlineMode = false;
       }
-      this.offlineMode = false;
       this.updateOfflineStatus();
       this.showView('ventas');
-      // Una cuenta distinta no debe enviar operaciones capturadas por otro
-      // usuario. Las suyas se intentan al volver a autenticarse en línea.
-      if ((await this.offlineStore.pendingForUser(user.userId)).length) {
-        this.offlineMode = true;
-        await this.syncOfflineOperations();
-      }
     } catch (error) {
       this.currentSession = null;
       this.currentShift = null;
@@ -510,6 +521,29 @@ class PointOfSaleApp {
     salesHistory.splice(0, salesHistory.length, ...localSales, ...confirmedSales);
   }
 
+  async restorePendingOfflineShift(knownOperations = null) {
+    const operations = knownOperations || await this.offlineStore.pendingForUser(this.currentSession.userId);
+    const shiftOperations = operations
+      .filter((operation) => operation.type === 'shift-open' || operation.type === 'shift-close')
+      .sort((first, second) => new Date(first.occurredAt) - new Date(second.occurredAt));
+    if (!shiftOperations.length) return;
+
+    // Normalmente el snapshot conserva el turno provisional. Si una versión
+    // anterior ya lo reemplazó al recargar, se reconstruye desde la cola.
+    const snapshot = await this.offlineStore.snapshot();
+    let shift = snapshot?.shift || this.currentShift;
+    for (const operation of shiftOperations) {
+      if (operation.type === 'shift-open') {
+        shift = { id: `offline-${operation.id}`, status: 'abierto', openedAt: operation.occurredAt, provisional: true };
+      } else if (shift) {
+        shift = { ...shift, status: 'cerrado', closedAt: operation.occurredAt, provisional: true };
+      }
+    }
+    this.currentShift = shift;
+    this.shiftSummary.setShift(shift);
+    this.syncShiftUi();
+  }
+
   async syncOfflineOperations() {
     if (this.syncingOffline || !this.currentSession) return;
     this.syncingOffline = true;
@@ -520,13 +554,25 @@ class PointOfSaleApp {
         this.offlineModeRequested = false;
         return;
       }
-      const { results } = await this.api.syncOffline(operations);
+      // El servidor acepta como máximo 100 operaciones por solicitud. Una
+      // tablet puede acumular cientos durante un corte prolongado, así que se
+      // envían por lotes sin perder las que aún no se hayan intentado.
+      const results = [];
+      for (let index = 0; index < operations.length; index += 100) {
+        const batch = operations.slice(index, index + 100);
+        const response = await this.api.syncOffline(batch);
+        results.push(...response.results);
+      }
       for (const result of results) {
         if (result.status === 'applied') await this.offlineStore.remove(result.id);
         else await this.offlineStore.mark(result.id, 'error', result.message || 'La operación fue rechazada por el servidor.');
       }
       const failed = results.filter((result) => result.status === 'error');
       if (failed.length) {
+        // Conserva en pantalla sólo las ventas que todavía son locales y
+        // actualiza las que el servidor sí alcanzó a aceptar en este lote.
+        try { await this.refreshData(); } catch (error) { console.warn('No se pudo refrescar después de sincronizar.', error); }
+        await this.restorePendingOfflineSales();
         failed.forEach((result) => {
           const localSale = salesHistory.find((sale) => sale.operationId === result.id);
           if (localSale) localSale.syncError = result.message || 'El servidor rechazó la operación.';
@@ -547,6 +593,10 @@ class PointOfSaleApp {
         this.showToast(`${results.length} operación(es) sincronizadas.`);
       }
     } catch (error) {
+      // La red puede cortarse entre lotes. IndexedDB sigue siendo la fuente de
+      // verdad local, por lo que las ventas pendientes deben seguir visibles.
+      await this.restorePendingOfflineSales();
+      this.renderAll();
       this.showToast(`No se pudo sincronizar. Las operaciones siguen seguras: ${error.message}`);
     } finally {
       this.syncingOffline = false;

@@ -56,6 +56,8 @@ test('la aplicación declara los recursos requeridos para la instalación PWA', 
   assert.match(scripts, /async remove\(id\)/);
   assert.match(scripts, /pendingSync: true/);
   assert.match(scripts, /restorePendingOfflineSales/);
+  assert.match(scripts, /restorePendingOfflineShift/);
+  assert.match(scripts, /operations\.slice\(index, index \+ 100\)/);
   assert.match(html, /id="update-available"/);
   assert.match(html, /Instalar aplicación en esta tablet/);
   assert.match(scripts, /serviceWorker\.register\('\/sw\.js'\)/);
