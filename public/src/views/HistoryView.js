@@ -10,7 +10,13 @@ class HistoryView {
     this.selectedDate = null;
     this.daySales = [];
     this.dayShifts = [];
+    this.canRefund = false;
     this.bindEvents();
+  }
+
+  setCanRefund(canRefund) {
+    this.canRefund = canRefund;
+    this.render();
   }
 
   bindEvents() {
@@ -207,7 +213,7 @@ class HistoryView {
       return `<details class="panel history-shift${active ? ' active-shift' : ''}" open>
         <summary><div><strong>Turno #${shift.dailyNumber ?? turnId}</strong><span class="muted">De ${firstTime} a ${lastTime}</span></div><div class="shift-quick-stats"><span class="shift-sales-count">${sales.length} ventas</span><span class="shift-type-total"><small>Comedor</small><strong>${this.formatMoney(typeTotals.COMEDOR)}</strong></span><span class="shift-type-total"><small>Facturada</small><strong>${this.formatMoney(typeTotals.FACTURADA)}</strong></span><span class="shift-type-total"><small>Personal</small><strong>${this.formatMoney(typeTotals.PERSONAL)}</strong></span><span class="shift-grand-total"><small>Total</small><strong>${this.formatMoney(total)}</strong></span></div></summary>
         <div class="table-wrap"><table><thead><tr><th>HORA</th><th>USUARIO</th><th>TIPO</th><th>PRODUCTOS Y CANTIDADES</th><th>TOTAL</th><th aria-label="Reembolso"></th></tr></thead><tbody>
-          ${sales.length ? newestSalesFirst.map((sale) => { const refunded = sale.lines.every((line) => line.qty === (line.refundedQty || 0)); const pending = Boolean(sale.pendingSync); const pendingText = sale.syncError ? `Requiere revisión: ${escapeHtml(sale.syncError)}` : 'Pendiente de sincronizar'; const refundText = sale.pendingRefund ? '<span class="pending-label">Reembolso pendiente</span>' : refunded ? '<span class="refunded-label">Reembolsado</span>' : `<button class="refund-action" data-refund-sale="${sale.id}">Reembolsar</button>`; return `<tr class="${refunded ? 'sale-refunded' : ''}${pending ? ' sale-pending' : ''}"><td>${escapeHtml(this.formatTime(sale.date))}</td><td>${escapeHtml(sale.userName)}</td><td><span class="sale-type sale-type-${sale.tipoVenta.toLowerCase()}">${escapeHtml(this.getSaleTypeLabel(sale.tipoVenta))}</span></td><td><div class="history-lines">${sale.lines.map((line) => `<div><span>${escapeHtml(line.productName)}</span><span class="muted">× ${line.qty}</span></div>`).join('')}</div></td><td class="sale-total"><strong>${this.formatMoney(sale.total)}</strong>${pending ? `<small class="pending-label">${pendingText}</small>` : ''}</td><td class="sale-refund">${refundText}</td></tr>`; }).join('') : '<tr><td colspan="6" class="muted">Este turno no registró ventas.</td></tr>'}
+          ${sales.length ? newestSalesFirst.map((sale) => { const refunded = sale.lines.every((line) => line.qty === (line.refundedQty || 0)); const pending = Boolean(sale.pendingSync); const pendingText = sale.syncError ? `Requiere revisión: ${escapeHtml(sale.syncError)}` : 'Pendiente de sincronizar'; const refundText = sale.pendingRefund ? '<span class="pending-label">Reembolso pendiente</span>' : refunded ? '<span class="refunded-label">Reembolsado</span>' : this.canRefund ? `<button class="refund-action" data-refund-sale="${sale.id}">Reembolsar</button>` : ''; return `<tr class="${refunded ? 'sale-refunded' : ''}${pending ? ' sale-pending' : ''}"><td>${escapeHtml(this.formatTime(sale.date))}</td><td>${escapeHtml(sale.userName)}</td><td><span class="sale-type sale-type-${sale.tipoVenta.toLowerCase()}">${escapeHtml(this.getSaleTypeLabel(sale.tipoVenta)}</span></td><td><div class="history-lines">${sale.lines.map((line) => `<div><span>${escapeHtml(line.productName)}</span><span class="muted">× ${line.qty}</span></div>`).join('')}</div></td><td class="sale-total"><strong>${this.formatMoney(sale.total)}</strong>${pending ? `<small class="pending-label">${pendingText}</small>` : ''}</td><td class="sale-refund">${refundText}</td></tr>`; }).join('') : '<tr><td colspan="6" class="muted">Este turno no registró ventas.</td></tr>'}
         </tbody></table></div>
       </details>`;
     }).join('');

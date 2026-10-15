@@ -14,6 +14,7 @@ class ApiError extends Error {
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const PRODUCT_ROLES = new Set(['administrador', 'encargado']);
+const SHIFT_CLOSE_ROLES = new Set(['administrador', 'encargado', 'cajero']);
 
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), { status, headers: { ...JSON_HEADERS, ...headers } });
@@ -315,7 +316,7 @@ async function openShift(env, session) {
 }
 
 async function closeShift(env, session) {
-  requireSession(session, PRODUCT_ROLES);
+  requireSession(session, SHIFT_CLOSE_ROLES);
   const result = await env.DB.prepare(`
     UPDATE turno SET estado = 'cerrado', cerrado_por_usuario_id = ?, fecha_cierre = CURRENT_TIMESTAMP
     WHERE sucursal_id = ? AND estado = 'abierto'
@@ -456,6 +457,7 @@ async function createOfflineSale(env, session, operation) {
 
 async function applyOfflineRestock(env, session, operation) {
   const actor = await offlineActor(env, session, operation);
+  if (!PRODUCT_ROLES.has(actor.role)) throw new ApiError(403, 'No tiene permiso para reponer inventario.', 'FORBIDDEN');
   const items = Array.isArray(operation.payload?.items) ? operation.payload.items : [];
   if (!items.length || items.length > 100) throw new ApiError(400, 'Reposición offline no válida.', 'VALIDATION_ERROR');
   const quantities = new Map();
@@ -494,6 +496,7 @@ async function applyOfflineShift(env, session, operation) {
 
 async function applyOfflineRefund(env, session, operation, saleIds) {
   const actor = await offlineActor(env, session, operation);
+  if (!PRODUCT_ROLES.has(actor.role)) throw new ApiError(403, 'No tiene permiso para reembolsar ventas.', 'FORBIDDEN');
   const requestedSaleId = Number(operation.payload?.saleId);
   const sourceOperationId = operation.payload?.saleOperationId;
   const sourceSaleId = typeof sourceOperationId === 'string'
@@ -600,7 +603,6 @@ async function refundSale(request, env, session, saleId) {
 }
 
 async function listSales(request, env, session) {
-  const cashier = session.role === 'cajero';
   const url = new URL(request.url);
   const month = url.searchParams.get('month') || null;
   const date = url.searchParams.get('date') || null;
@@ -612,11 +614,10 @@ async function listSales(request, env, session) {
     throw new ApiError(400, 'El día seleccionado no tiene un formato válido.', 'VALIDATION_ERROR');
   }
   const statement = env.DB.prepare(`
-    SELECT v.id FROM venta v WHERE v.sucursal_id = ? ${cashier ? 'AND v.usuario_id = ?' : ''} ${month ? "AND strftime('%Y-%m', v.fecha_hora) = ?" : ''} ${date ? "AND date(v.fecha_hora) = ?" : ''}
+    SELECT v.id FROM venta v WHERE v.sucursal_id = ? ${month ? "AND strftime('%Y-%m', v.fecha_hora) = ?" : ''} ${date ? "AND date(v.fecha_hora) = ?" : ''}
     ORDER BY v.fecha_hora DESC LIMIT ${month || date ? 1000 : 200}
   `);
   const params = [session.branchId];
-  if (cashier) params.push(session.userId);
   if (month) params.push(month);
   if (date) params.push(date);
   const result = await statement.bind(...params).all();
@@ -638,12 +639,9 @@ async function listSales(request, env, session) {
       WHERE t.sucursal_id = ? AND (
         date(t.fecha_apertura) = ? OR EXISTS (SELECT 1 FROM venta v WHERE v.turno_id = t.id AND date(v.fecha_hora) = ?)
       )
-        ${cashier ? 'AND EXISTS (SELECT 1 FROM venta v WHERE v.turno_id = t.id AND v.usuario_id = ?)' : ''}
       ORDER BY t.fecha_apertura
     `);
-    const shiftResult = cashier
-      ? await shiftStatement.bind(session.branchId, date, date, session.userId).all()
-      : await shiftStatement.bind(session.branchId, date, date).all();
+    const shiftResult = await shiftStatement.bind(session.branchId, date, date).all();
     shifts = shiftResult.results;
   }
   return json({ sales, shifts });
@@ -654,28 +652,23 @@ async function listSaleDays(request, env, session) {
   if (!month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
     throw new ApiError(400, 'Seleccione un mes válido para consultar sus días.', 'VALIDATION_ERROR');
   }
-  const cashier = session.role === 'cajero';
   const statement = env.DB.prepare(`
     SELECT date(v.fecha_hora) AS date, COUNT(*) AS salesCount, SUM(v.total_centavos) AS totalCents
-    FROM venta v WHERE v.sucursal_id = ? ${cashier ? 'AND v.usuario_id = ?' : ''}
+    FROM venta v WHERE v.sucursal_id = ?
       AND strftime('%Y-%m', v.fecha_hora) = ?
     GROUP BY date(v.fecha_hora) ORDER BY date DESC
   `);
-  const params = cashier ? [session.branchId, session.userId, month] : [session.branchId, month];
-  const result = await statement.bind(...params).all();
+  const result = await statement.bind(session.branchId, month).all();
   return json({ days: result.results.map((entry) => ({ date: entry.date, salesCount: entry.salesCount, total: entry.totalCents / 100 })) });
 }
 
 async function listSaleMonths(env, session) {
-  const cashier = session.role === 'cajero';
   const statement = env.DB.prepare(`
     SELECT strftime('%Y-%m', v.fecha_hora) AS month, COUNT(*) AS salesCount
-    FROM venta v WHERE v.sucursal_id = ? ${cashier ? 'AND v.usuario_id = ?' : ''}
+    FROM venta v WHERE v.sucursal_id = ?
     GROUP BY strftime('%Y-%m', v.fecha_hora) ORDER BY month DESC
   `);
-  const result = cashier
-    ? await statement.bind(session.branchId, session.userId).all()
-    : await statement.bind(session.branchId).all();
+  const result = await statement.bind(session.branchId).all();
   return json({ months: result.results.map((entry) => ({ month: entry.month, salesCount: entry.salesCount })) });
 }
 

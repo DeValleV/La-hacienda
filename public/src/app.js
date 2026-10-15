@@ -378,7 +378,7 @@ class PointOfSaleApp {
 
   applyPermissions() {
     const canManageInventory = ['administrador', 'encargado'].includes(this.currentSession.role);
-    const canCloseShift = ['administrador', 'encargado'].includes(this.currentSession.role);
+    const canCloseShift = true;
     const isAdmin = this.currentSession.role === 'administrador';
     const inventoryButton = document.querySelector('[data-view="inventario"]');
     const summaryButton = document.querySelector('[data-view="resumen"]');
@@ -389,6 +389,7 @@ class PointOfSaleApp {
     document.getElementById('add-product').hidden = !canManageInventory;
     document.getElementById('bulk-restock').hidden = !canManageInventory;
     this.shiftSummary.setCanClose(canCloseShift);
+    this.history.setCanRefund(canManageInventory);
   }
 
   async refreshData() {
@@ -625,6 +626,9 @@ class PointOfSaleApp {
   }
 
   async refundSale(saleId) {
+    if (!['administrador', 'encargado'].includes(this.currentSession.role)) {
+      throw new Error('No tiene permiso para reembolsar ventas.');
+    }
     if (this.offlineMode) {
       const sale = salesHistory.find((item) => String(item.id) === String(saleId))
         || this.history.daySales.find((item) => String(item.id) === String(saleId));
@@ -654,7 +658,6 @@ class PointOfSaleApp {
     button.disabled = true;
     try {
       if (this.currentShift?.status === 'abierto') {
-        if (!['administrador', 'encargado'].includes(this.currentSession.role)) return;
         if (!(await this.confirmCloseShift())) return;
         if (this.offlineMode) {
           await this.offlineStore.enqueue('shift-close', {}, { userId: this.currentSession.userId });
