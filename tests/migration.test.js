@@ -107,3 +107,34 @@ test('una venta histórica offline se conserva aunque el turno ya cerró o exced
   assert.equal(database.prepare('SELECT total_centavos FROM venta WHERE id = 2001').get().total_centavos, 38500);
   database.close();
 });
+
+test('una operación offline de venta se registra después de crear la venta para respetar su llave foránea', () => {
+  const database = createDatabase();
+  database.exec('PRAGMA foreign_keys = ON');
+  database.prepare('INSERT INTO turno (sucursal_id, abierto_por_usuario_id) VALUES (?, ?)').run(1, 1);
+
+  database.exec('BEGIN');
+  database.prepare(`
+    INSERT INTO venta (id, sucursal_id, turno_id, tipo_venta_id, usuario_id, origen_offline)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `).run(3001, 1, 1, 1, 1);
+  database.prepare(`
+    INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en, venta_id)
+    VALUES (?, ?, ?, 'sale', ?, ?)
+  `).run('30000000-0000-4000-8000-000000000001', 1, 1, '2026-10-15T12:00:00.000Z', 3001);
+  database.exec('COMMIT');
+
+  assert.equal(database.prepare('SELECT venta_id FROM operacion_offline WHERE operation_id = ?')
+    .get('30000000-0000-4000-8000-000000000001').venta_id, 3001);
+
+  const worker = readFileSync(new URL('../src/worker.js', import.meta.url), 'utf8');
+  const createOfflineSale = worker.slice(
+    worker.indexOf('async function createOfflineSale'),
+    worker.indexOf('async function applyOfflineRestock'),
+  );
+  assert.ok(
+    createOfflineSale.indexOf('INSERT INTO venta') < createOfflineSale.indexOf('INSERT INTO operacion_offline'),
+    'la venta debe insertarse antes de la operación offline que la referencia',
+  );
+  database.close();
+});

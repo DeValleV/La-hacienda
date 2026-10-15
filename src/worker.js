@@ -442,8 +442,6 @@ async function createOfflineSale(env, session, operation) {
   const [actor, shift] = await Promise.all([offlineActor(env, session, operation), offlineTurn(env, session, operation)]);
   const saleId = randomSaleId();
   const statements = [
-    env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en, venta_id) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(operation.id, session.branchId, actor.id, 'sale', operation.occurredAt, saleId),
     env.DB.prepare('INSERT INTO venta (id, sucursal_id, turno_id, tipo_venta_id, usuario_id, fecha_hora, origen_offline) VALUES (?, ?, ?, ?, ?, ?, 1)')
       .bind(saleId, session.branchId, shift.id, saleType.id, actor.id, operation.occurredAt),
   ];
@@ -451,6 +449,10 @@ async function createOfflineSale(env, session, operation) {
     INSERT INTO detalle_venta (venta_id, producto_id, cantidad, nombre_producto, precio_unitario_centavos)
     VALUES (?, ?, ?, COALESCE(?, (SELECT nombre_base FROM producto WHERE id = ?)), COALESCE(?, (SELECT precio_centavos FROM producto WHERE id = ?)))
   `).bind(saleId, productId, line.quantity, line.name, productId, line.priceCents, productId)));
+  // venta_id tiene llave foránea: la venta debe existir antes de registrar la
+  // operación como aplicada. El batch se ejecuta en este orden.
+  statements.push(env.DB.prepare('INSERT INTO operacion_offline (operation_id, sucursal_id, usuario_id, tipo, ocurrida_en, venta_id) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(operation.id, session.branchId, actor.id, 'sale', operation.occurredAt, saleId));
   await env.DB.batch(statements);
   return saleId;
 }
