@@ -188,7 +188,7 @@ class InventoryView {
     const product = this.products.find((item) => item.id === this.restockingProductId);
 
     if (!product || !Number.isInteger(quantity) || quantity < 1) {
-      this.showToast('Ingrese una cantidad válida mayor a cero.');
+      this.showToast('Ingrese una cantidad válida mayor a cero.', 'error');
       return;
     }
 
@@ -198,7 +198,7 @@ class InventoryView {
       document.getElementById('restock-dialog').close();
       this.showToast(`${product.name}: ${quantity} unidades agregadas.`);
     } catch (error) {
-      this.showToast(error.message);
+      this.showToast(error.message, 'error');
     } finally {
       submit.disabled = false;
     }
@@ -239,12 +239,12 @@ class InventoryView {
     const inputs = [...document.querySelectorAll('.bulk-restock-input')];
     const items = inputs.map((input) => ({ productId: Number(input.dataset.productId), quantity: Number(input.value) }));
     if (items.some(({ productId, quantity }) => !Number.isInteger(productId) || !Number.isInteger(quantity) || quantity < 0)) {
-      this.showToast('Revise las cantidades: deben ser números enteros iguales o mayores que 0.');
+      this.showToast('Revise las cantidades: deben ser números enteros iguales o mayores que 0.', 'error');
       return;
     }
     const selectedItems = items.filter(({ quantity }) => quantity > 0);
     if (!selectedItems.length) {
-      this.showToast('Escriba una cantidad mayor que 0 en al menos un producto.');
+      this.showToast('Escriba una cantidad mayor que 0 en al menos un producto.', 'error');
       return;
     }
 
@@ -256,7 +256,7 @@ class InventoryView {
       const total = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
       this.showToast(`Inventario repuesto: ${total} unidades en ${selectedItems.length} producto${selectedItems.length === 1 ? '' : 's'}.`);
     } catch (error) {
-      this.showToast(error.message);
+      this.showToast(error.message, 'error');
     } finally {
       submit.disabled = false;
     }
@@ -309,7 +309,7 @@ class InventoryView {
       await this.onDeactivateProduct(product.id);
       this.showToast('Producto desactivado.');
     } catch (error) {
-      this.showToast(error.message);
+      this.showToast(error.message, 'error');
     }
   }
 
@@ -320,7 +320,7 @@ class InventoryView {
       await this.onActivateProduct(product.id);
       this.showToast('Producto activado. Ya puede volver a venderse.');
     } catch (error) {
-      this.showToast(error.message);
+      this.showToast(error.message, 'error');
     }
   }
 
@@ -334,12 +334,12 @@ class InventoryView {
     const stock = Number(document.getElementById('new-stock').value);
     const minStock = Number(document.getElementById('new-min-stock').value);
 
-    if (!category) return this.showToast('Seleccione una categoría para el producto.');
-    if (!brand) return this.showToast('Seleccione una marca para el producto.');
-    if (!name.trim()) return this.showToast('Escriba el nombre del producto.');
-    if (!Number.isFinite(price) || price < 0) return this.showToast('Escriba un precio válido, igual o mayor que 0.');
-    if (!Number.isInteger(stock) || stock < 0) return this.showToast('Las existencias deben ser un número entero igual o mayor que 0.');
-    if (!Number.isInteger(minStock) || minStock < 0) return this.showToast('El stock mínimo debe ser un número entero igual o mayor que 0.');
+    if (!category) return this.showToast('Seleccione una categoría para el producto.', 'error');
+    if (!brand) return this.showToast('Seleccione una marca para el producto.', 'error');
+    if (!name.trim()) return this.showToast('Escriba el nombre del producto.', 'error');
+    if (!Number.isFinite(price) || price < 0) return this.showToast('Escriba un precio válido, igual o mayor que 0.', 'error');
+    if (!Number.isInteger(stock) || stock < 0) return this.showToast('Las existencias deben ser un número entero igual o mayor que 0.', 'error');
+    if (!Number.isInteger(minStock) || minStock < 0) return this.showToast('El stock mínimo debe ser un número entero igual o mayor que 0.', 'error');
 
     const editingProduct = this.products.find((item) => item.id === this.editingProductId);
     submit.disabled = true;
@@ -354,10 +354,10 @@ class InventoryView {
         this.editingProductId = error.productId;
         document.querySelector('#product-dialog h2').textContent = 'Editar producto';
         document.getElementById('save-product').textContent = 'Guardar cambios';
-        this.showToast(`El producto fue creado, pero no se pudo subir la imagen: ${error.message}`);
+        this.showToast(`El producto fue creado, pero no se pudo subir la imagen: ${error.message}`, 'error');
         return;
       }
-      this.showToast(error.message);
+      this.showToast(error.message, 'error');
     } finally {
       submit.disabled = false;
     }
@@ -416,12 +416,12 @@ class InventoryView {
     }[catalog];
     const existingOptions = [...this.products.map((item) => item[config.property]).filter(Boolean), ...config.extras];
     if (!name) {
-      this.showToast(`Escriba el nombre de la ${config.label}.`);
+      this.showToast(`Escriba el nombre de la ${config.label}.`, 'error');
       input.focus();
       return;
     }
     if (existingOptions.some((option) => option.toLocaleLowerCase() === name.toLocaleLowerCase())) {
-      this.showToast(`Esa ${config.label} ya existe.`);
+      this.showToast(`Esa ${config.label} ya existe.`, 'error');
       input.focus();
       return;
     }
@@ -464,11 +464,11 @@ class InventoryView {
     if (!file) return;
     const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
     if (!allowedTypes.has(file.type)) {
-      this.showToast('Seleccione una imagen JPG, PNG o WebP.');
+      this.showToast('Seleccione una imagen JPG, PNG o WebP.', 'error');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      this.showToast('La imagen no debe superar 5 MB.');
+      this.showToast('La imagen no debe superar 5 MB.', 'error');
       return;
     }
     this.pendingImage = file;
@@ -529,7 +529,7 @@ class InventoryView {
     } catch {
       if (document.getElementById('image-crop-dialog').open) document.getElementById('image-crop-dialog').close();
       URL.revokeObjectURL(sourceUrl);
-      this.showToast('No se pudo abrir la imagen para recortarla.');
+      this.showToast('No se pudo abrir la imagen para recortarla.', 'error');
     }
   }
 
@@ -599,7 +599,7 @@ class InventoryView {
     context.drawImage(source, ((state.width - dimensions.width) / 2 + state.offsetX) * factor, ((state.height - dimensions.height) / 2 + state.offsetY) * factor, dimensions.width * factor, dimensions.height * factor);
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.75));
     if (!blob) {
-      this.showToast('No se pudo crear el recorte.');
+      this.showToast('No se pudo crear el recorte.', 'error');
       return;
     }
     const name = this.pendingImage.name.replace(/\.[^.]+$/, '') || 'producto';

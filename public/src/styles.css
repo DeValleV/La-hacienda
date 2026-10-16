@@ -2695,3 +2695,13 @@ html.touch-tablet .product-card small {
     animation-duration: .01ms !important;
   }
 }
+
+/* Interruptor de sonido (reutiliza el patrón del modo online/offline) */
+.sidebar .sound-toggle-button { margin-top: 8px; padding: 8px 12px; color: var(--muted); border-top: 0; }
+.sidebar .sound-toggle-button strong { color: var(--muted); }
+.sidebar .sound-toggle-button[aria-checked="true"] { color: var(--blue); }
+.sidebar .sound-toggle-button[aria-checked="true"] strong { color: var(--green); }
+.sidebar .sound-toggle-button .offline-mode-toggle { background: #ccc; }
+.sidebar .sound-toggle-button .offline-mode-toggle::after { transform: translateX(-13px); }
+.sidebar .sound-toggle-button[aria-checked="true"] .offline-mode-toggle { background: #b9d9c7; }
+.sidebar .sound-toggle-button[aria-checked="true"] .offline-mode-toggle::after { transform: none; }

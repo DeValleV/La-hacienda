@@ -246,7 +246,7 @@ class HistoryView {
 
   async submitRefund() {
     const button = document.getElementById('refund-submit'); button.disabled = true;
-    try { await this.onRefund(this.refundSale.id); document.getElementById('refund-dialog').close(); } finally { button.disabled = false; }
+    try { await this.onRefund(this.refundSale.id); document.getElementById('refund-dialog').close(); } catch (error) { window.soundPlayer?.play('error'); throw error; } finally { button.disabled = false; }
   }
 
   getSaleTypeLabel(type) {

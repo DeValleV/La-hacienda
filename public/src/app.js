@@ -55,6 +55,7 @@ class PointOfSaleApp {
     this.bindNavigation();
     this.bindSidebarToggle();
     this.bindDialogs();
+    this.bindSoundToggle();
     this.bindLogin();
     document.getElementById('retry-connection').addEventListener('click', () => this.retryConnection());
     document.getElementById('keep-waiting').addEventListener('click', () => this.hideSlowConnection());
@@ -206,6 +207,7 @@ class PointOfSaleApp {
       const password = document.getElementById('login-password').value;
       if (!Number.isInteger(branchId) || branchId < 1 || !username || !password) {
         this.showLoginError('Seleccione una sucursal y escriba su usuario y contraseña.');
+        window.soundPlayer?.play('error');
         return;
       }
       submit.disabled = true;
@@ -224,6 +226,7 @@ class PointOfSaleApp {
         if (error.code === 'NETWORK_ERROR' && await this.loginOffline({ branchId, username, password })) return;
         this.showLogin();
         this.showLoginError(error.message);
+        window.soundPlayer?.play('error');
       } finally {
         submit.disabled = false;
       }
@@ -352,7 +355,7 @@ class PointOfSaleApp {
     this.renderAll();
     this.updateOfflineStatus();
     this.showView('ventas');
-    this.showToast('Modo sin conexión activo. Las ventas se sincronizarán al reconectar.');
+    this.showToast('Modo sin conexión activo. Las ventas se sincronizarán al reconectar.', 'info');
   }
 
   showLoginError(message) {
@@ -362,7 +365,7 @@ class PointOfSaleApp {
   }
 
   async logout() {
-    try { await this.api.logout(); } catch (error) { this.showToast(error.message); }
+    try { await this.api.logout(); } catch (error) { this.showToast(error.message, 'error'); }
     this.currentSession = null;
     this.currentShift = null;
     this.shiftSummary.setShift(null);
@@ -483,7 +486,7 @@ class PointOfSaleApp {
     this.offlineMode = true;
     this.offlineModeRequested = true;
     this.updateOfflineStatus();
-    this.showToast('Sin conexión: los cambios nuevos se guardarán localmente.');
+    this.showToast('Sin conexión: los cambios nuevos se guardarán localmente.', 'info');
   }
 
   provisionalSale(operation, sale) {
@@ -580,7 +583,7 @@ class PointOfSaleApp {
         });
         this.renderAll();
         const detail = failed[0].message || 'El servidor rechazó la operación.';
-        this.showToast(`${failed.length} operación(es) requieren revisión: ${detail}`);
+        this.showToast(`${failed.length} operación(es) requieren revisión: ${detail}`, 'error');
       } else {
         this.offlineMode = false;
         this.offlineModeRequested = false;
@@ -598,7 +601,7 @@ class PointOfSaleApp {
       // verdad local, por lo que las ventas pendientes deben seguir visibles.
       await this.restorePendingOfflineSales();
       this.renderAll();
-      this.showToast(`No se pudo sincronizar. Las operaciones siguen seguras: ${error.message}`);
+      this.showToast(`No se pudo sincronizar. Las operaciones siguen seguras: ${error.message}`, 'error');
     } finally {
       this.syncingOffline = false;
       this.updateOfflineStatus();
@@ -645,12 +648,12 @@ class PointOfSaleApp {
       await this.offlineStore.saveSnapshot({ ...(await this.offlineStore.snapshot()), products });
       this.renderAll();
       this.updateOfflineStatus();
-      this.showToast(`Reembolso pendiente de sincronizar (${operation.id.slice(0, 8)}).`);
+      this.showToast(`Reembolso pendiente de sincronizar (${operation.id.slice(0, 8)}).`, 'major');
       return;
     }
     await this.api.refundSale(saleId);
     await Promise.all([this.refreshData(), this.loadHistory(true)]);
-    this.showToast('Reembolso registrado e inventario actualizado.');
+    this.showToast('Reembolso registrado e inventario actualizado.', 'major');
   }
 
   async toggleShift() {
@@ -683,9 +686,10 @@ class PointOfSaleApp {
       // la API aquí convertía una acción válida en un falso error de red.
       if (this.offlineMode) this.renderAll();
       else await this.refreshData();
-      this.showToast(this.currentShift?.status === 'abierto' ? 'Turno iniciado.' : 'Turno finalizado.');
+      const shiftOpened = this.currentShift?.status === 'abierto';
+      this.showToast(shiftOpened ? 'Turno iniciado.' : 'Turno finalizado.', shiftOpened ? 'success' : 'major');
     } catch (error) {
-      this.showToast(error.message);
+      this.showToast(error.message, 'error');
     } finally {
       button.disabled = false;
     }
@@ -738,7 +742,7 @@ class PointOfSaleApp {
       const { days } = await this.api.getSalesDays(month);
       this.history.setDays(month, days);
     } catch (error) {
-      this.showToast(error.message);
+      this.showToast(error.message, 'error');
       throw error;
     }
   }
@@ -748,7 +752,7 @@ class PointOfSaleApp {
       const { sales, shifts } = await this.api.getSales({ date });
       this.history.setDaySales(sales, shifts);
     } catch (error) {
-      this.showToast(error.message);
+      this.showToast(error.message, 'error');
       throw error;
     }
   }
@@ -783,6 +787,22 @@ class PointOfSaleApp {
       })],
     }]);
     this.showToast('Se descargó el inventario en formato Excel.');
+  }
+
+  bindSoundToggle() {
+    const toggle = document.getElementById('toggle-sound');
+    const sync = () => {
+      toggle.setAttribute('aria-checked', String(window.soundPlayer.enabled));
+      document.getElementById('sound-label').textContent = window.soundPlayer.enabled ? 'Activado' : 'Silenciado';
+    };
+    toggle.addEventListener('click', () => {
+      // El clic ya sonó (toggle) si estaba activo; al activar, suena confirmando.
+      const player = window.soundPlayer;
+      player.setEnabled(!player.enabled);
+      if (player.enabled) player.play('toggle');
+      sync();
+    });
+    sync();
   }
 
   bindDialogs() {
@@ -863,7 +883,9 @@ class PointOfSaleApp {
     }
   }
 
-  showToast(message) {
+  // type: 'success' | 'error' | 'major' (acción irreversible completada) | 'info' (sin sonido)
+  showToast(message, type = 'success') {
+    window.soundPlayer?.play(type === 'info' ? null : type);
     const toast = document.getElementById('toast');
     toast.textContent = message;
     toast.classList.add('show');

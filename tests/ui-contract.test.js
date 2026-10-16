@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const root = new URL('../', import.meta.url);
 const html = readFileSync(new URL('public/index.html', root), 'utf8');
 const scripts = [
   'public/src/app.js',
+  'public/src/sound.js',
   'public/src/offline.js',
   'public/src/pwa.js',
   'public/src/views/InventoryView.js',
@@ -70,4 +71,19 @@ test('la aplicación declara los recursos requeridos para la instalación PWA', 
   assert.match(scripts, /APP_RELEASE_VERSION/);
   assert.match(readFileSync(new URL('public/sw.js', root), 'utf8'), /src\/release\.js/);
   assert.match(readFileSync(new URL('public/src/styles.css', root), 'utf8'), /\.connection-indicator\.is-offline/);
+});
+
+test('los sonidos de la interfaz existen y están en el precache del service worker', () => {
+  const soundSource = readFileSync(new URL('public/src/sound.js', root), 'utf8');
+  const serviceWorker = readFileSync(new URL('public/sw.js', root), 'utf8');
+  const files = [...soundSource.matchAll(/:\s*'([a-z]+_\d{3})'/g)].map((match) => match[1]);
+  assert.ok(files.length >= 10);
+  for (const file of files) {
+    assert.ok(existsSync(new URL(`public/sounds/${file}.wav`, root)), `${file}.wav no existe`);
+    assert.match(serviceWorker, new RegExp(`/sounds/${file}\\.wav`));
+  }
+  assert.match(serviceWorker, /\/src\/sound\.js/);
+  assert.match(serviceWorker, /\/src\/haptics\.js/);
+  assert.match(html, /src="src\/haptics\.js"/);
+  assert.match(html, /src="src\/sound\.js"/);
 });

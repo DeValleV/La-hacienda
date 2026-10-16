@@ -204,12 +204,18 @@ class SalesView {
     document.getElementById('change-amount').textContent = this.formatMoney(changeCents / 100);
   }
 
+  // Toast + vibración háptica (solo móviles que la soporten): corta al vender, larga en error.
+  notify(message, type) {
+    window.haptics?.[type === 'error' ? 'error' : 'success']();
+    this.showToast(message, type);
+  }
+
   addToCart(productId) {
     const product = this.getProduct(productId);
     if (!product) return;
     const line = this.cart.find((item) => item.id === product.id);
     if (product.stock <= (line?.qty || 0)) {
-      this.showToast('No hay más existencias disponibles.');
+      this.notify('No hay más existencias disponibles.', 'error');
       return;
     }
 
@@ -258,11 +264,11 @@ class SalesView {
   async checkout(tipoVenta) {
     if (this.isCheckingOut) return;
     if (!this.isShiftOpen) {
-      this.showToast('Debe iniciar un turno antes de registrar ventas.');
+      this.notify('Debe iniciar un turno antes de registrar ventas.', 'error');
       return;
     }
     if (!this.cart.length) {
-      this.showToast('Agregue al menos un producto al pedido.');
+      this.notify('Agregue al menos un producto al pedido.', 'error');
       return;
     }
 
@@ -270,7 +276,7 @@ class SalesView {
     const totalCents = this.getTotalCents(lines);
     const amountPaidCents = this.toCents(this.getAmountPaid());
     if (!Number.isFinite(amountPaidCents) || amountPaidCents < totalCents) {
-      this.showToast('La cantidad pagada debe cubrir el total de la venta.');
+      this.notify('La cantidad pagada debe cubrir el total de la venta.', 'error');
       return;
     }
 
@@ -289,9 +295,9 @@ class SalesView {
       this.cart = [];
       this.paymentWasEdited = false;
       this.renderOrder();
-      this.showToast(`Venta ${tipoVenta.toLowerCase()} cobrada y existencias actualizadas.`);
+      this.notify(`Venta ${tipoVenta.toLowerCase()} cobrada y existencias actualizadas.`, 'success');
     } catch (error) {
-      this.showToast(error.message);
+      this.notify(error.message, 'error');
     } finally {
       this.isCheckingOut = false;
       document.querySelectorAll('#checkout-options button').forEach((button) => { button.disabled = !this.isShiftOpen; });

@@ -59,34 +59,34 @@ class SettingsView {
     const edit = event.target.closest('[data-edit-user]'); if (edit) return this.editUser(Number(edit.dataset.editUser));
     const button = event.target.closest('[data-toggle-user]'); const user = this.users.find((item) => item.id === Number(button?.dataset.toggleUser)); if (!user) return;
     button.disabled = true;
-    try { await this.api.updateUser(user.id, { name: user.name, username: user.username, role: user.role, branchId: user.branchId, active: !user.active }); await this.load(); this.showToast(`Usuario ${user.active ? 'desactivado' : 'activado'}.`); } catch (error) { this.showToast(error.message); } finally { button.disabled = false; }
+    try { await this.api.updateUser(user.id, { name: user.name, username: user.username, role: user.role, branchId: user.branchId, active: !user.active }); await this.load(); this.showToast(`Usuario ${user.active ? 'desactivado' : 'activado'}.`); } catch (error) { this.showToast(error.message, 'error'); } finally { button.disabled = false; }
   }
 
   async handleBranchAction(event) {
     const edit = event.target.closest('[data-edit-branch]'); if (edit) return this.editBranch(Number(edit.dataset.editBranch));
     const button = event.target.closest('[data-toggle-branch]'); const branch = this.branches.find((item) => item.id === Number(button?.dataset.toggleBranch)); if (!branch) return;
     button.disabled = true;
-    try { await this.api.updateBranch(branch.id, { name: branch.name, code: branch.code, address: branch.address || '', active: !branch.active }); await this.load(); this.showToast(`Sucursal ${branch.active ? 'desactivada' : 'activada'}.`); } catch (error) { this.showToast(error.message); } finally { button.disabled = false; }
+    try { await this.api.updateBranch(branch.id, { name: branch.name, code: branch.code, address: branch.address || '', active: !branch.active }); await this.load(); this.showToast(`Sucursal ${branch.active ? 'desactivada' : 'activada'}.`); } catch (error) { this.showToast(error.message, 'error'); } finally { button.disabled = false; }
   }
 
   async saveUser(event) {
     event.preventDefault(); const submit = event.currentTarget.querySelector('[type="submit"]'); const id = Number(document.getElementById('user-id').value) || null;
     const payload = { name: document.getElementById('user-name').value.trim(), username: document.getElementById('user-username').value.trim(), role: document.getElementById('user-role').value, branchId: Number(document.getElementById('user-branch').value), password: document.getElementById('user-password').value, active: document.getElementById('user-active').checked };
-    if (!payload.name || !payload.username || !Number.isInteger(payload.branchId) || payload.branchId < 1) return this.showToast('Complete nombre, usuario y sucursal.'); if (!id && !payload.password) return this.showToast('La contraseña es obligatoria para un usuario nuevo.'); if (payload.password && payload.password.length < 10) return this.showToast('La contraseña debe tener al menos 10 caracteres.');
-    submit.disabled = true; try { if (id) await this.api.updateUser(id, payload); else await this.api.createUser(payload); document.getElementById('user-dialog').close(); await this.load(); this.showToast('Usuario guardado.'); } catch (error) { this.showToast(error.message); } finally { submit.disabled = false; }
+    if (!payload.name || !payload.username || !Number.isInteger(payload.branchId) || payload.branchId < 1) return this.showToast('Complete nombre, usuario y sucursal.', 'error'); if (!id && !payload.password) return this.showToast('La contraseña es obligatoria para un usuario nuevo.', 'error'); if (payload.password && payload.password.length < 10) return this.showToast('La contraseña debe tener al menos 10 caracteres.', 'error');
+    submit.disabled = true; try { if (id) await this.api.updateUser(id, payload); else await this.api.createUser(payload); document.getElementById('user-dialog').close(); await this.load(); this.showToast('Usuario guardado.'); } catch (error) { this.showToast(error.message, 'error'); } finally { submit.disabled = false; }
   }
 
   async saveBranch(event) {
     event.preventDefault(); const submit = event.currentTarget.querySelector('[type="submit"]'); const id = Number(document.getElementById('branch-id').value) || null;
     const payload = { name: document.getElementById('branch-name').value.trim(), code: document.getElementById('branch-code').value.trim(), address: document.getElementById('branch-address').value.trim(), active: document.getElementById('branch-active').checked };
-    if (!payload.name || !payload.code) return this.showToast('Complete nombre y código de la sucursal.');
-    submit.disabled = true; try { if (id) await this.api.updateBranch(id, payload); else await this.api.createBranch(payload); document.getElementById('branch-dialog').close(); await this.load(); this.showToast('Sucursal guardada.'); } catch (error) { this.showToast(error.message); } finally { submit.disabled = false; }
+    if (!payload.name || !payload.code) return this.showToast('Complete nombre y código de la sucursal.', 'error');
+    submit.disabled = true; try { if (id) await this.api.updateBranch(id, payload); else await this.api.createBranch(payload); document.getElementById('branch-dialog').close(); await this.load(); this.showToast('Sucursal guardada.'); } catch (error) { this.showToast(error.message, 'error'); } finally { submit.disabled = false; }
   }
 
   async saveCatalog(event) {
     event.preventDefault(); const submit = event.currentTarget.querySelector('[type="submit"]'); const type = document.getElementById('catalog-type').value; const id = Number(document.getElementById('catalog-id').value) || null; const name = document.getElementById('catalog-name').value.trim();
-    if (!name) return this.showToast('Escriba el nombre del elemento.');
-    submit.disabled = true; try { if (id) await this.api.updateCatalogItem(type, id, name); else await this.api.createCatalogItem(type, name); document.getElementById('catalog-dialog').close(); await this.load(); this.showToast('Catálogo guardado.'); } catch (error) { this.showToast(error.message); } finally { submit.disabled = false; }
+    if (!name) return this.showToast('Escriba el nombre del elemento.', 'error');
+    submit.disabled = true; try { if (id) await this.api.updateCatalogItem(type, id, name); else await this.api.createCatalogItem(type, name); document.getElementById('catalog-dialog').close(); await this.load(); this.showToast('Catálogo guardado.'); } catch (error) { this.showToast(error.message, 'error'); } finally { submit.disabled = false; }
   }
 }
 

@@ -7,7 +7,8 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8'
+  '.css': 'text/css; charset=utf-8',
+  '.wav': 'audio/wav'
 };
 
 const server = http.createServer((req, res) => {
