@@ -4,6 +4,7 @@ const SOUND_FILES = {
   tap: 'click_002',
   nav: 'tick_001',
   add: 'select_002',
+  product: 'click_001',
   remove: 'back_001',
   toggle: 'toggle_001',
   open: 'open_001',
@@ -17,7 +18,7 @@ const SOUND_FILES = {
 // Reglas de clic en orden de prioridad. 'none' = el sonido lo dará el resultado de la acción.
 const CLICK_RULES = [
   ['[data-sound]', (el) => el.dataset.sound],
-  ['[data-add]', () => 'add'],
+  ['[data-add]', () => 'product'],
   ['[data-change]', (el) => (Number(el.dataset.delta) < 0 ? 'remove' : 'add')],
   ['.cart-item-remove, #clear-cart', () => 'remove'],
   ['[role="switch"]', () => 'toggle'],

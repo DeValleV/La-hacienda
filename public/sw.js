@@ -1,10 +1,11 @@
-const CACHE_VERSION = 'la-hacienda-shell-v17';
+const CACHE_VERSION = 'la-hacienda-shell-v18';
 const APP_SHELL = [
   '/', '/index.html', '/offline.html', '/manifest.webmanifest', '/icons/app-icon.svg',
   '/src/styles.css', '/src/inventory.css', '/src/sales-summary.css', '/src/release.js', '/src/sound.js', '/src/haptics.js',
   '/src/excel.js', '/src/api.js', '/src/offline.js', '/src/app.js', '/src/pwa.js',
   '/src/views/InventoryView.js', '/src/views/SalesView.js', '/src/views/ShiftSummaryView.js',
   '/src/views/HistoryView.js', '/src/views/SettingsView.js',
+  '/sounds/click_001.wav',
   '/sounds/click_002.wav',
   '/sounds/tick_001.wav',
   '/sounds/select_002.wav',
